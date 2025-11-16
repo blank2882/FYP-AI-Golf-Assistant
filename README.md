@@ -4,9 +4,36 @@ This repository contains a golf-swing pose extraction prototype. The project use
 
 
 ## Quick start (recommended)
-1. Activate the conda virtual environment 
-    . conda activate "E:\year 3\FYP\golf assistant prototype\.conda"
-2. Run main.py + the video of choice
+
+### Install the local LLM
+1. Install ollama (https://ollama.com/)
+
+2. Run '''ollama pull phi3''' in terminal
+
+### Create the Conda virtual environment
+1. Create a conda virtual environment
+    - Ensure that the python version is either 3.10 or 3.11 to make it compatible for mediapipe pose
+
+2. Activate the conda virtual environment 
+    - conda activate "E:\year 3\FYP\golf assistant prototype\.conda"
+
+3. install the dependencies in requirements.txt with pip
+    - pip install -r requirements.txt
+
+4. install the pytorch dependencies with conda
+    - conda install -c pytorch pytorch torchvision torchaudio cpuonly -y (for CPU only)
+    - conda install -c pytorch -c nvidia pytorch torchvision torchaudio pytorch-cuda=11.8 -y (for GPU)
+
+5. Install coqui TTS 
+    - pip install TTS
+
+6. To test that the TTS is working
+    - tts --text "Hello golfer!" --model_name tts_models/en/ljspeech/tacotron2-DDC --out_path [audio file path] 
+
+
+
+
+5. Run main.py + the video of choice
 
 
 
