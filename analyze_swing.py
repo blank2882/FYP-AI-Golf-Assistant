@@ -13,6 +13,14 @@ class SwingAnalyzer:
         return swing_events
 
     def detect_swing_errors(self, keypoints):
+        # Handle empty keypoints (e.g., pose extraction failed)
+        try:
+            if keypoints is None or keypoints.size == 0:
+                return []
+        except Exception:
+            # If keypoints does not have numpy-like interface, continue and let reshape fail normally
+            pass
+
         keypoints_flat = keypoints.reshape(keypoints.shape[0], -1)
         keypoints_tensor = torch.tensor(keypoints_flat).float().unsqueeze(0)
 

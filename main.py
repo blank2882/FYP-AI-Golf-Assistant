@@ -1,9 +1,7 @@
 from mediapipe_pose import PoseExtractor
 from analyze_swing import SwingAnalyzer
 from swingnet import SwingNet
-from lstm import SwingLSTM
 from llm_feedback import generate_feedback
-from tts import generate_audio_feedback
 import torch
 import cv2
 from pathlib import Path
@@ -15,26 +13,49 @@ def process_golf_swing(video_path):
     pe = PoseExtractor()
     keypoints = pe.video_to_keypoints(video_path)
 
-    # --- 2. Load SwingNet + LSTM ---
+    # --- 2. Load SwingNet ---
     swingnet = SwingNet()
-    lstm_model = SwingLSTM()
 
     analyzer = None
     swing_events = []
 
     # load weights if available; otherwise skip model-based detection
     weights_ok = True
-    if not Path("swingnet_weights.pth").exists() or not Path("lstm_weights.pth").exists():
+    if not Path("swingnet_1800.pth.tar").exists():
         print("Model weight files not found — skipping SwingNet/LSTM inference.")
         weights_ok = False
 
     if weights_ok:
         try:
-            swingnet.load_state_dict(torch.load("swingnet_weights.pth", map_location="cpu"))
-            lstm_model.load_state_dict(torch.load("lstm_weights.pth", map_location="cpu"))
+            ckpt = torch.load("swingnet_1800.pth.tar", map_location="cpu")
+            # Support both raw state_dict and wrapped checkpoints (common pattern: {'model_state_dict': ..., ...})
+            state_dict = None
+            if isinstance(ckpt, dict):
+                if 'model_state_dict' in ckpt:
+                    state_dict = ckpt['model_state_dict']
+                elif 'state_dict' in ckpt:
+                    state_dict = ckpt['state_dict']
+                else:
+                    # Heuristic: if keys look like parameter names (contain a dot), assume it's already a state_dict
+                    try:
+                        first_key = next(iter(ckpt.keys()))
+                        if isinstance(first_key, str) and ('.' in first_key or first_key.startswith('cnn') or first_key.startswith('lstm') or first_key.startswith('fc')):
+                            state_dict = ckpt
+                    except StopIteration:
+                        state_dict = None
+            else:
+                state_dict = ckpt
+
+            if state_dict is None:
+                raise RuntimeError('Unable to find model state_dict in checkpoint')
+
+            # Try a non-strict load so parameters that match the current model are loaded
+            # while allowing for architectural differences between saved checkpoint and model.
+            missing, unexpected = swingnet.load_state_dict(state_dict, strict=False)
+            if missing or unexpected:
+                print(f"Warning: loaded checkpoint with mismatches. Missing keys: {missing}; Unexpected keys: {unexpected}")
             swingnet.eval()
-            lstm_model.eval()
-            analyzer = SwingAnalyzer(swingnet, lstm_model)
+            analyzer = SwingAnalyzer(swingnet, swingnet.lstm)
         except Exception as e:
             print("Failed loading model weights:", e)
             analyzer = None
@@ -73,6 +94,7 @@ def process_golf_swing(video_path):
     swing_errors = []
     if analyzer is not None:
         try:
+            # perform error detection using keypoints
             swing_errors = analyzer.detect_swing_errors(keypoints)
         except Exception as e:
             print("Error during swing error detection:", e)
@@ -91,7 +113,15 @@ def process_golf_swing(video_path):
 
     # --- 6. Generate voice feedback ---
     try:
-        audio_path = generate_audio_feedback(coaching_text)
+        # Import TTS lazily so the main module can run even when TTS dependencies fail
+        try:
+            from tts import generate_audio_feedback
+        except Exception as ie:
+            print("TTS import failed; audio will not be generated:", ie)
+            audio_path = None
+        else:
+            # Generate an audio file from the coaching text
+            audio_path = generate_audio_feedback(coaching_text, output_path="feedback.wav")
     except Exception as e:
         print("Audio generation failed:", e)
         audio_path = None

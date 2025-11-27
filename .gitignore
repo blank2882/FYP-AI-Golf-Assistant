@@ -1,0 +1,20 @@
+# Ignore dataset directory
+# /data/
+
+# Python caches
+__pycache__/
+*.py[cod]
+/feedback.wav
+/logs/
+
+# Conda / virtual environments
+# Ignore common environment folders created by Conda, venv, and virtualenv
+.env/
+.venv/
+venv/
+env/
+envs/
+.conda/
+conda-env/
+logs/
+

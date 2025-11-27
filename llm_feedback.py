@@ -37,6 +37,7 @@ def generate_feedback(faults):
         "clearly and give actionable, simple corrections.\n\n"
         f"Swing faults detected: {faults}\n\n"
         "Give personalized advice as if talking directly to the golfer."
+        "Keep it concise and easy to understand. Keep the word count under 150 and only form complete sentences."
     )
 
     try:
