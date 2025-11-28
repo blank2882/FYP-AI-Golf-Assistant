@@ -1,5 +1,5 @@
 # Ignore dataset directory
-# /data/
+/data/
 
 # Python caches
 __pycache__/
@@ -17,4 +17,7 @@ envs/
 .conda/
 conda-env/
 logs/
+
+.pipeline/
+.pipeline_out/
 

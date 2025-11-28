@@ -42,3 +42,23 @@ Troubleshooting
 - If `docker compose up` fails, ensure Docker Desktop is running and WSL2 integration is enabled.
 - If you need Python 3.11 locally instead of Docker, install Python 3.11 and create a virtual environment, then run `python -m pip install -r requirements.txt`.
 
+MediaPipe landmark ranges
+-------------------------
+
+MediaPipe reports normalized landmark coordinates (x,y) in the range [0,1] relative to the image. In practice, landmarks that fall outside the image area may occasionally have coordinates slightly below 0 or above 1. Visibility/confidence values are also nominally in [0,1].
+
+The repository tests relax strict [0,1] assumptions (and `estimate_pose.py` clips keypoints before returning) so downstream code receives sane, clipped values. If you need the raw un-clipped values for debugging, modify `estimate_pose.extract_pose_keypoints` accordingly.
+
+
+# Things to be done tomorrow
+1) REdo the code
+    - smart_crop
+        - change the crop logic such that the whole golfer's body, club and ball are still in the video after cropping
+        - add the code where can save the cropped video after smart_crop runs to check how the crop is done on the video
+    - mediapipe
+        - implement from the previous chatgpt answer
+    - swingnet
+        - implement from the previous chatgpt answer
+    - llm 
+        - implement from the previous chatgpt answer
+    * Ensure that each of the files are ran under a unit test to make sure that the file works first before integrating into the code 

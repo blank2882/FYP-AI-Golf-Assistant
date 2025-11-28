@@ -1,4 +1,13 @@
-numpy
 opencv-python
 mediapipe
+torch
+torchvision
+numpy
+requests
+tqdm
 TTS
+
+
+ffmpeg-python
+ffmpeg
+pytest

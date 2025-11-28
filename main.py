@@ -1,134 +1,123 @@
-from mediapipe_pose import PoseExtractor
-from analyze_swing import SwingAnalyzer
-from swingnet import SwingNet
-from llm_feedback import generate_feedback
-import torch
-import cv2
-from pathlib import Path
+# main.py
+import sys
 import os
+import json
 import numpy as np
+from pathlib import Path
 
-def process_golf_swing(video_path):
-    # --- 1. Pose Extraction ---
-    pe = PoseExtractor()
-    keypoints = pe.video_to_keypoints(video_path)
+# local modules (assume these exist from prior steps)
+from smart_crop import preprocess_frame   # unchanged
+from estimate_pose import extract_pose_keypoints  # returns (keypoints_seq, frames_for_swingnet)
+from swingnet_inference import load_swingnet, run_swingnet, get_best_event_frames, save_debug_frames
+from feedback_llm import generate_feedback
 
-    # --- 2. Load SwingNet ---
-    swingnet = SwingNet()
+# fault detectors (optional) — re-use your earlier rule-based detectors if present
+try:
+    from fault_detectors import (detect_early_extension, detect_sway_or_slide,
+                                 detect_over_the_top, detect_casting,
+                                 detect_chicken_wing, detect_head_movement)
+    HAVE_FAULT_DETECTORS = True
+except Exception:
+    HAVE_FAULT_DETECTORS = False
 
-    analyzer = None
-    swing_events = []
+OUTPUT_DIR = "pipeline_out"
 
-    # load weights if available; otherwise skip model-based detection
-    weights_ok = True
-    if not Path("swingnet_1800.pth.tar").exists():
-        print("Model weight files not found — skipping SwingNet/LSTM inference.")
-        weights_ok = False
+def swing_was_detected(event_frames):
+    # require Address, Top, Impact for a valid full swing
+    required = {"Address", "Top", "Impact"}
+    return required.issubset(set(event_frames.keys()))
 
-    if weights_ok:
-        try:
-            ckpt = torch.load("swingnet_1800.pth.tar", map_location="cpu")
-            # Support both raw state_dict and wrapped checkpoints (common pattern: {'model_state_dict': ..., ...})
-            state_dict = None
-            if isinstance(ckpt, dict):
-                if 'model_state_dict' in ckpt:
-                    state_dict = ckpt['model_state_dict']
-                elif 'state_dict' in ckpt:
-                    state_dict = ckpt['state_dict']
-                else:
-                    # Heuristic: if keys look like parameter names (contain a dot), assume it's already a state_dict
-                    try:
-                        first_key = next(iter(ckpt.keys()))
-                        if isinstance(first_key, str) and ('.' in first_key or first_key.startswith('cnn') or first_key.startswith('lstm') or first_key.startswith('fc')):
-                            state_dict = ckpt
-                    except StopIteration:
-                        state_dict = None
-            else:
-                state_dict = ckpt
+def save_json(obj, path):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2)
 
-            if state_dict is None:
-                raise RuntimeError('Unable to find model state_dict in checkpoint')
+def main(video_path, swingnet_ckpt="models/swingnet_1800.pth.tar", seq_len=64, device='cpu'):
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    print("\n▶ Step 1: Extracting pose keypoints and SwingNet frames")
+    keypoints_seq, frames_224 = extract_pose_keypoints(video_path)
+    # frames_224 shape (T, 3, 224, 224) as float in [0,1] from extractor
+    print("Extracted keypoints:", keypoints_seq.shape)
+    print("Prepared frames for SwingNet:", frames_224.shape)
 
-            # Try a non-strict load so parameters that match the current model are loaded
-            # while allowing for architectural differences between saved checkpoint and model.
-            missing, unexpected = swingnet.load_state_dict(state_dict, strict=False)
-            if missing or unexpected:
-                print(f"Warning: loaded checkpoint with mismatches. Missing keys: {missing}; Unexpected keys: {unexpected}")
-            swingnet.eval()
-            analyzer = SwingAnalyzer(swingnet, swingnet.lstm)
-        except Exception as e:
-            print("Failed loading model weights:", e)
-            analyzer = None
+    # Save debug frames for visual inspection
+    dbg_dir = save_debug_frames(frames_224, out_dir=os.path.join(OUTPUT_DIR, "debug_frames"), max_save=60)
+    print("Saved debug frames to", dbg_dir)
 
-    # --- 3. Detect swing events using SwingNet (if analyzer available) ---
-    frames_tensor = None
-    if analyzer is not None:
-        # build a simple frames tensor from the video
-        cap = cv2.VideoCapture(video_path)
-        frames = []
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            # resize to 224x224 and convert to RGB
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, (224, 224))
-            frames.append(frame)
-        cap.release()
+    print("\n▶ Step 2: Load SwingNet")
+    model = load_swingnet(model_path=swingnet_ckpt, device=device)
 
-        if len(frames) > 0:
-            arr = np.stack(frames, axis=0)  # (T, H, W, C)
-            # convert to (1, T, 3, H, W) and normalize to [0,1]
-            arr = arr.astype(np.float32) / 255.0
-            arr = np.transpose(arr, (0, 3, 1, 2))
-            frames_tensor = torch.from_numpy(arr).unsqueeze(0)
+    print("\n▶ Step 3: Run SwingNet inference")
+    probs, preds = run_swingnet(model, frames_224, device=device)
+    print("Raw per-frame preds shape:", preds.shape)
 
-            try:
-                with torch.no_grad():
-                    swing_events = analyzer.detect_swing_events(frames_tensor)
-            except Exception as e:
-                print("Error during swing event detection:", e)
-                swing_events = []
+    # Save raw probs and preds for debugging/threshold tuning
+    try:
+        np.save(os.path.join(OUTPUT_DIR, "probs.npy"), probs)
+        np.save(os.path.join(OUTPUT_DIR, "preds.npy"), preds)
+    except Exception as e:
+        print("Warning: failed to save probs/preds:", e)
 
-    # --- 4. Detect swing errors using keypoints ---
-    swing_errors = []
-    if analyzer is not None:
-        try:
-            # perform error detection using keypoints
-            swing_errors = analyzer.detect_swing_errors(keypoints)
-        except Exception as e:
-            print("Error during swing error detection:", e)
+    print("\n▶ Step 4: Choose best event frames (peak confidence)")
+    event_frames = get_best_event_frames(probs)
+    print("Event frames (best peaks):", dict(event_frames))
+    save_json(dict(event_frames), os.path.join(OUTPUT_DIR, "event_frames.json"))
 
-    # --- 5. Generate LLM feedback ---
-    # prepare a faults summary to send to the feedback generator
-    faults = {
-        "events": swing_events,
-        "errors": swing_errors,
+    # Swing validity check
+    if not swing_was_detected(event_frames):
+        print("\n⚠️  No full swing detected — aborting LLM feedback to avoid hallucination.")
+        # Still save outputs
+        out = {
+            "event_frames": dict(event_frames),
+            "message": "No full swing detected. Please record a full swing (Address → Top → Impact)."
+        }
+        save_json(out, os.path.join(OUTPUT_DIR, "result.json"))
+        print("Saved result to", os.path.join(OUTPUT_DIR, "result.json"))
+        return out
+
+    print("\n▶ Step 5: (Optional) Run rule-based fault detectors for corroboration")
+    detected_faults = []
+    try:
+        if HAVE_FAULT_DETECTORS:
+            ee, ee_score = detect_early_extension(keypoints_seq, top_frame=event_frames.get("Top"), impact_frame=event_frames.get("Impact"))
+            if ee: detected_faults.append(("early_extension", ee_score))
+            sway_label, sway_score = detect_sway_or_slide(keypoints_seq, address_frame=event_frames.get("Address"), impact_frame=event_frames.get("Impact"))
+            if sway_label: detected_faults.append((sway_label, sway_score))
+            ott, ott_score = detect_over_the_top(keypoints_seq, top_frame=event_frames.get("Top"))
+            if ott: detected_faults.append(("over_the_top", ott_score))
+            cast, cast_score = detect_casting(keypoints_seq, top_frame=event_frames.get("Top"))
+            if cast: detected_faults.append(("casting", cast_score))
+            ch, ch_score = detect_chicken_wing(keypoints_seq, impact_frame=event_frames.get("Impact"))
+            if ch: detected_faults.append(("chicken_wing", ch_score))
+            head, head_score = detect_head_movement(keypoints_seq, address_frame=event_frames.get("Address"), impact_frame=event_frames.get("Impact"))
+            if head: detected_faults.append(("head_movement", head_score))
+    except Exception as e:
+        print("Fault detectors failed or not present:", e)
+
+    print("Rule-based detected faults:", detected_faults)
+    save_json({"rule_faults": detected_faults}, os.path.join(OUTPUT_DIR, "rule_faults.json"))
+
+    print("\n▶ Step 6: Generate evidence-grounded coaching with Ollama")
+    try:
+        coaching = generate_feedback(event_frames, keypoints_seq, prefer_http=True, model="qwen2.5")
+    except Exception as e:
+        coaching = f"LLM failed: {e}"
+    print("LLM generation done.")
+
+    # Save final outputs
+    result = {
+        "event_frames": dict(event_frames),
+        "rule_faults": detected_faults,
+        "coaching": coaching
     }
-    try:
-        coaching_text = generate_feedback(faults)
-    except Exception as e:
-        print("Feedback generation failed:", e)
-        coaching_text = "(Feedback unavailable)"
+    save_json(result, os.path.join(OUTPUT_DIR, "result.json"))
 
-    # --- 6. Generate voice feedback ---
-    try:
-        # Import TTS lazily so the main module can run even when TTS dependencies fail
-        try:
-            from tts import generate_audio_feedback
-        except Exception as ie:
-            print("TTS import failed; audio will not be generated:", ie)
-            audio_path = None
-        else:
-            # Generate an audio file from the coaching text
-            audio_path = generate_audio_feedback(coaching_text, output_path="feedback.wav")
-    except Exception as e:
-        print("Audio generation failed:", e)
-        audio_path = None
+    # also save coaching text for easy viewing
+    with open(os.path.join(OUTPUT_DIR, "coaching.txt"), "w", encoding="utf-8") as f:
+        f.write(str(coaching))
 
-    return coaching_text, audio_path
+    print("\nPipeline finished — results saved to", OUTPUT_DIR)
+    return result
 
 if __name__ == "__main__":
-    text, audio = process_golf_swing("sample_swing.mp4")
-    print("Coaching:", text)
-    print("Audio saved at:", audio)
+    video = sys.argv[1]
+    main(video)
