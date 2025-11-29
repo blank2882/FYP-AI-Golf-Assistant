@@ -1,84 +1,89 @@
-import numpy as np
-import torch
-import pytest
-import importlib
 import sys
-import pathlib
+import os
+import tempfile
+import numpy as np
+import cv2
+import pytest
 
-# Ensure repo root is on sys.path so tests can import project modules
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+# Skip tests if torch not available in this environment; they can be run in the
+# project's conda env where torch is installed.
+pytest.importorskip('torch')
+import torch
+
+# Provide a lightweight fake `golfdb.model.EventDetector` before importing
+# `swingnet_inference` so the module import does not pull in the real heavy
+# implementation (which requires additional binary dependencies).
+import types
+
+
+class _FakeEventDetector(torch.nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        # register a dummy parameter so next(model.parameters()) works
+        self.p = torch.nn.Parameter(torch.zeros(1))
+
+    def forward(self, x):
+        # x shape: (1, T, 3, H, W) -> produce logits shape (1, T, C)
+        batch, T, C, H, W = x.shape
+        # produce deterministic logits for testing: class 0 has higher score at frame 0
+        logits = torch.zeros(batch, T, len(range(9)), dtype=torch.float32)
+        for t in range(T):
+            logits[:, t, :] = torch.linspace(0.1 + t * 0.01, 0.9 + t * 0.01, steps=9)
+        return logits
+
+
+fake_mod = types.ModuleType('golfdb.model')
+fake_mod.EventDetector = _FakeEventDetector
+sys.modules['golfdb.model'] = fake_mod
 
 import swingnet_inference as sni
 
 
-def test_detect_events_with_dummy_model():
-    # Create synthetic frames: 10 timesteps, 3x224x224
+def test_get_best_event_frames_basic():
+    # Create a probs matrix where each class peaks at different frames
     T = 10
+    C = len(sni.EVENT_LIST)
+    probs = np.zeros((T, C), dtype=float)
+    for c in range(C):
+        idx = min(T - 1, c * 1)
+        probs[idx, c] = 0.5 + c * 0.01
+
+    ordered = sni.get_best_event_frames(probs, min_confidence=0.1)
+    # Should return an ordered dict with keys in increasing frame order
+    assert isinstance(ordered, dict)
+    assert len(ordered) == C
+    last_idx = -1
+    for v in ordered.values():
+        assert v >= last_idx
+        last_idx = v
+
+
+def test_save_debug_frames_creates_files(tmp_path):
+    T = 5
     frames = np.zeros((T, 3, 224, 224), dtype=np.float32)
+    out_dir = str(tmp_path / "debug_out")
+    returned = sni.save_debug_frames(frames, out_dir=out_dir, max_save=10)
+    assert returned == out_dir
+    # check files exist
+    files = os.listdir(out_dir)
+    assert len(files) == T
 
-    # Dummy model that predicts class = timestep % 7 for each frame
-    class DummyModel(torch.nn.Module):
-        def forward(self, x):
-            # x shape: (1, T, C, H, W)
-            batch_size, timesteps, C, H, W = x.shape
-            out = torch.zeros(batch_size * timesteps, 9)
-            for i in range(batch_size * timesteps):
-                cls = i % len(sni.EVENT_LIST)
-                out[i, cls] = 10.0  # large logit to force argmax
-            return out
 
-    model = DummyModel()
-    event_frames, preds, probs = sni.detect_events(frames, model)
+def test_run_swingnet_with_fake_model():
+    # Create simple frames and run through run_swingnet with the fake model
+    T = 8
+    frames = np.random.rand(T, 3, 224, 224).astype('float32')
+    model = _FakeEventDetector()
+    probs, preds = sni.run_swingnet(model, frames)
 
-    # Ensure preds length equals T
+    assert probs.shape[0] == T
     assert preds.shape[0] == T
-    # Ensure probs shape matches (T, num_classes)
-    assert probs.shape == (T, 9)
-    # Each event in EVENT_LIST should have a first occurrence recorded
-    for idx, name in enumerate(sni.EVENT_LIST):
-        assert name in event_frames
-        assert isinstance(event_frames[name], int)
+    # probabilities should sum to 1 across classes
+    sums = probs.sum(axis=1)
+    assert np.allclose(sums, 1.0, atol=1e-5)
 
 
-def _import_estimate_pose():
-    try:
-        return importlib.import_module('estimate_pose')
-    except Exception:
-        return None
-
-
-@pytest.mark.skipif(_import_estimate_pose() is None, reason="estimate_pose (mediapipe) not available")
-def test_pipeline_frames_from_estimate_pose_to_swingnet_dummy_model(tmp_path):
-    estimate_pose = _import_estimate_pose()
-
-    # Build a short video clip from golfdb/test_video.mp4, reuse previous test pattern
-    repo_root = tmp_path
-    # We'll call estimate_pose on the repo's test video by resolving relative path from cwd
-    import pathlib
-    src = pathlib.Path('golfdb') / 'test_video.mp4'
-    if not src.exists():
-        pytest.skip(f"Source test video not found at {src}")
-
-    # extract frames_seq using estimate_pose
-    keypoints_seq, frames_seq = estimate_pose.extract_pose_keypoints(str(src))
-    if frames_seq.size == 0:
-        pytest.skip('estimate_pose returned no frames')
-
-    # frames_seq shape is (N, 3, 224, 224) according to estimate_pose
-    # Use a dummy model that marks the first frame as 'Impact' (index 5)
-    class DummyModel2(torch.nn.Module):
-        def forward(self, x):
-            batch_size, timesteps, C, H, W = x.shape
-            out = torch.zeros(batch_size * timesteps, 9)
-            # Set high logit for class 5 at first frame
-            out[0, 5] = 20.0
-            return out
-
-    model = DummyModel2()
-    event_frames, preds, probs = sni.detect_events(frames_seq, model)
-
-    # Expect 'Impact' to be present and mapped to frame 0
-    assert 'Impact' in event_frames
-    assert event_frames['Impact'] == 0
+def test_load_swingnet_missing_checkpoint_raises():
+    # Ensure missing checkpoint triggers FileNotFoundError
+    with pytest.raises(FileNotFoundError):
+        sni.load_swingnet(model_path='nonexistent_checkpoint.pth', device='cpu')

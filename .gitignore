@@ -21,3 +21,6 @@ logs/
 .pipeline/
 .pipeline_out/
 
+.
+__pycache__/
+

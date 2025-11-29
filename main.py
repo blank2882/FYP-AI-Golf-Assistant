@@ -2,122 +2,115 @@
 import sys
 import os
 import json
-import numpy as np
 from pathlib import Path
+import numpy as np
 
-# local modules (assume these exist from prior steps)
-from smart_crop import preprocess_frame   # unchanged
-from estimate_pose import extract_pose_keypoints  # returns (keypoints_seq, frames_for_swingnet)
+from estimate_pose import extract_pose_and_swing_frames
 from swingnet_inference import load_swingnet, run_swingnet, get_best_event_frames, save_debug_frames
-from feedback_llm import generate_feedback
+from fault_detectors import (detect_early_extension,
+                             detect_sway_or_slide,
+                             detect_over_the_top,
+                             detect_casting,
+                             detect_chicken_wing,
+                             detect_head_movement)
+from llm_feedback import generate_feedback
 
-# fault detectors (optional) — re-use your earlier rule-based detectors if present
-try:
-    from fault_detectors import (detect_early_extension, detect_sway_or_slide,
-                                 detect_over_the_top, detect_casting,
-                                 detect_chicken_wing, detect_head_movement)
-    HAVE_FAULT_DETECTORS = True
-except Exception:
-    HAVE_FAULT_DETECTORS = False
 
 OUTPUT_DIR = "pipeline_out"
+SWINGNET_CKPT = "models/swingnet_1800.pth.tar"
+SWINGNET_MIN_CONF = 0.10
+
 
 def swing_was_detected(event_frames):
-    # require Address, Top, Impact for a valid full swing
     required = {"Address", "Top", "Impact"}
-    return required.issubset(set(event_frames.keys()))
+    return required.issubset(event_frames.keys())
+
 
 def save_json(obj, path):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2)
 
-def main(video_path, swingnet_ckpt="models/swingnet_1800.pth.tar", seq_len=64, device='cpu'):
+
+def main(video_path, seq_len=128, device="cpu"):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    print("\n▶ Step 1: Extracting pose keypoints and SwingNet frames")
-    keypoints_seq, frames_224 = extract_pose_keypoints(video_path)
-    # frames_224 shape (T, 3, 224, 224) as float in [0,1] from extractor
-    print("Extracted keypoints:", keypoints_seq.shape)
-    print("Prepared frames for SwingNet:", frames_224.shape)
 
-    # Save debug frames for visual inspection
-    dbg_dir = save_debug_frames(frames_224, out_dir=os.path.join(OUTPUT_DIR, "debug_frames"), max_save=60)
-    print("Saved debug frames to", dbg_dir)
+    print("\n🎬 Step 1 — Extracting frames & pose keypoints…")
+    keypoints_seq, frames_for_swingnet = extract_pose_and_swing_frames(video_path, seq_len=seq_len)
 
-    print("\n▶ Step 2: Load SwingNet")
-    model = load_swingnet(model_path=swingnet_ckpt, device=device)
+    if keypoints_seq is None:
+        print("❌ ERROR: Could not extract video frames.")
+        return
 
-    print("\n▶ Step 3: Run SwingNet inference")
-    probs, preds = run_swingnet(model, frames_224, device=device)
-    print("Raw per-frame preds shape:", preds.shape)
+    print("Keypoints:", keypoints_seq.shape)
+    print("SwingNet frames:", frames_for_swingnet.shape)
 
-    # Save raw probs and preds for debugging/threshold tuning
-    try:
-        np.save(os.path.join(OUTPUT_DIR, "probs.npy"), probs)
-        np.save(os.path.join(OUTPUT_DIR, "preds.npy"), preds)
-    except Exception as e:
-        print("Warning: failed to save probs/preds:", e)
+    save_debug_frames(frames_for_swingnet, out_dir=os.path.join(OUTPUT_DIR, "debug_frames"))
 
-    print("\n▶ Step 4: Choose best event frames (peak confidence)")
-    event_frames = get_best_event_frames(probs)
-    print("Event frames (best peaks):", dict(event_frames))
+
+    print("\n⛳ Step 2 — Loading SwingNet")
+    model = load_swingnet(SWINGNET_CKPT, device=device)
+
+
+    print("\n🔎 Step 3 — Running SwingNet inference…")
+    probs, preds = run_swingnet(model, frames_for_swingnet, device=device)
+
+
+    print("\n📌 Step 4 — Selecting event frames…")
+    event_frames = get_best_event_frames(probs, min_confidence=SWINGNET_MIN_CONF)
+    print("Detected events:", dict(event_frames))
+
     save_json(dict(event_frames), os.path.join(OUTPUT_DIR, "event_frames.json"))
 
-    # Swing validity check
+
     if not swing_was_detected(event_frames):
-        print("\n⚠️  No full swing detected — aborting LLM feedback to avoid hallucination.")
-        # Still save outputs
-        out = {
-            "event_frames": dict(event_frames),
-            "message": "No full swing detected. Please record a full swing (Address → Top → Impact)."
-        }
-        save_json(out, os.path.join(OUTPUT_DIR, "result.json"))
-        print("Saved result to", os.path.join(OUTPUT_DIR, "result.json"))
-        return out
+        print("\n⚠ No valid full swing detected. Skipping LLM phase.")
+        return
 
-    print("\n▶ Step 5: (Optional) Run rule-based fault detectors for corroboration")
-    detected_faults = []
-    try:
-        if HAVE_FAULT_DETECTORS:
-            ee, ee_score = detect_early_extension(keypoints_seq, top_frame=event_frames.get("Top"), impact_frame=event_frames.get("Impact"))
-            if ee: detected_faults.append(("early_extension", ee_score))
-            sway_label, sway_score = detect_sway_or_slide(keypoints_seq, address_frame=event_frames.get("Address"), impact_frame=event_frames.get("Impact"))
-            if sway_label: detected_faults.append((sway_label, sway_score))
-            ott, ott_score = detect_over_the_top(keypoints_seq, top_frame=event_frames.get("Top"))
-            if ott: detected_faults.append(("over_the_top", ott_score))
-            cast, cast_score = detect_casting(keypoints_seq, top_frame=event_frames.get("Top"))
-            if cast: detected_faults.append(("casting", cast_score))
-            ch, ch_score = detect_chicken_wing(keypoints_seq, impact_frame=event_frames.get("Impact"))
-            if ch: detected_faults.append(("chicken_wing", ch_score))
-            head, head_score = detect_head_movement(keypoints_seq, address_frame=event_frames.get("Address"), impact_frame=event_frames.get("Impact"))
-            if head: detected_faults.append(("head_movement", head_score))
-    except Exception as e:
-        print("Fault detectors failed or not present:", e)
 
-    print("Rule-based detected faults:", detected_faults)
-    save_json({"rule_faults": detected_faults}, os.path.join(OUTPUT_DIR, "rule_faults.json"))
+    print("\n🧠 Step 5 — Rule-based biomechanics analysis…")
+    faults = []
 
-    print("\n▶ Step 6: Generate evidence-grounded coaching with Ollama")
-    try:
-        coaching = generate_feedback(event_frames, keypoints_seq, prefer_http=True, model="qwen2.5")
-    except Exception as e:
-        coaching = f"LLM failed: {e}"
-    print("LLM generation done.")
+    # early extension
+    ee, ee_score = detect_early_extension(keypoints_seq, event_frames.get("Top"), event_frames.get("Impact"))
+    if ee: faults.append(("early_extension", ee_score))
 
-    # Save final outputs
-    result = {
-        "event_frames": dict(event_frames),
-        "rule_faults": detected_faults,
-        "coaching": coaching
-    }
-    save_json(result, os.path.join(OUTPUT_DIR, "result.json"))
+    # sway/slide
+    sw, sw_score = detect_sway_or_slide(keypoints_seq, event_frames.get("Address"), event_frames.get("Impact"))
+    if sw: faults.append((sw, sw_score))
 
-    # also save coaching text for easy viewing
+    # OTT
+    ott, ott_score = detect_over_the_top(keypoints_seq, event_frames.get("Top"))
+    if ott: faults.append(("over_the_top", ott_score))
+
+    # casting
+    cast, cast_score = detect_casting(keypoints_seq, event_frames.get("Top"))
+    if cast: faults.append(("casting", cast_score))
+
+    # chicken wing
+    wing, wing_score = detect_chicken_wing(keypoints_seq, event_frames.get("Impact"))
+    if wing: faults.append(("chicken_wing", wing_score))
+
+    # head movement
+    head, head_score = detect_head_movement(keypoints_seq, event_frames.get("Address"), event_frames.get("Impact"))
+    if head: faults.append(("head_movement", head_score))
+
+    print("Biomechanics faults:", faults)
+    save_json({"faults": faults}, os.path.join(OUTPUT_DIR, "rule_faults.json"))
+
+
+    print("\n💬 Step 6 — Generating LLM feedback…")
+    coaching = generate_feedback(event_frames, keypoints_seq)
+
     with open(os.path.join(OUTPUT_DIR, "coaching.txt"), "w", encoding="utf-8") as f:
-        f.write(str(coaching))
+        f.write(coaching)
 
-    print("\nPipeline finished — results saved to", OUTPUT_DIR)
-    return result
+    print("\n✅ Pipeline complete! Results saved to:", OUTPUT_DIR)
+
 
 if __name__ == "__main__":
-    video = sys.argv[1]
-    main(video)
+    if len(sys.argv) < 2:
+        print("Usage: python main.py <video>")
+        sys.exit(1)
+
+    video_path = sys.argv[1]
+    main(video_path)
