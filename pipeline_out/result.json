@@ -1,0 +1,27 @@
+{
+  "event_frames": {
+    "Mid-Backswing": 0,
+    "Address": 3,
+    "Follow-Through": 10,
+    "Top": 107,
+    "Toe-Up": 113,
+    "Impact": 116,
+    "Mid-Downswing": 137,
+    "Finish": 137
+  },
+  "rule_faults": [
+    [
+      "early_extension",
+      0.20154616484313934
+    ],
+    [
+      "slide",
+      446542.35981478554
+    ],
+    [
+      "head_movement",
+      638976.2759208679
+    ]
+  ],
+  "coaching": "```json\n{\n  \"faults\": [\n    {\n      \"name\": \"Decreased Hip Flexion Range of Motion\",\n      \"evidence\": \"The hip flexion angle is reduced in multiple cycles (normalized to -10 to 10 degrees).\",\n      \"cue\": \"Focus on bringing your knee closer to your chest during the motion.\",\n      \"drill\": \"Perform 10-15 reps of high-knee marching in place, emphasizing deep hip flexion.\"\n    },\n    {\n      \"name\": \"Reduced Knee Extension Strength\",\n      \"evidence\": \"Knee extension is weaker compared to other cycles (normalized to -2 to 2 degrees).\",\n      \"cue\": \"Drive through the heel with each step.\",\n      \"drill\": \"Do calf raises by standing on a raised surface and lowering your heels, then push up.\"\n    },\n    {\n      \"name\": \"Inconsistent Step Length\",\n      \"evidence\": \"There is variability in step length across multiple cycles (normalized to -3 to 3 degrees).\",\n      \"cue\": \"Ensure each step covers the same distance as the previous one.\",\n      \"drill\": \"Perform single-leg stance with eyes closed, stepping forward and backward while maintaining balance.\"\n    }\n  ],\n  \"summary\": \"The data indicates several biomechanical irregularities that could be addressed through targeted exercises to improve hip flexion range of motion, knee extension strength, and step consistency.\"\n}\n```\n\nThis JSON output identifies three specific faults based on the provided keypoints, provides a measurable description for each fault, suggests a corrective cue, and offers a short drill to address the issue.\n\n"
+}

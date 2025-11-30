@@ -6,6 +6,7 @@ numpy
 requests
 tqdm
 TTS
+scipy
 
 
 ffmpeg-python

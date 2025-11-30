@@ -1,0 +1,28 @@
+```json
+{
+  "faults": [
+    {
+      "name": "Decreased Hip Flexion Range of Motion",
+      "evidence": "The hip flexion angle is reduced in multiple cycles (normalized to -10 to 10 degrees).",
+      "cue": "Focus on bringing your knee closer to your chest during the motion.",
+      "drill": "Perform 10-15 reps of high-knee marching in place, emphasizing deep hip flexion."
+    },
+    {
+      "name": "Reduced Knee Extension Strength",
+      "evidence": "Knee extension is weaker compared to other cycles (normalized to -2 to 2 degrees).",
+      "cue": "Drive through the heel with each step.",
+      "drill": "Do calf raises by standing on a raised surface and lowering your heels, then push up."
+    },
+    {
+      "name": "Inconsistent Step Length",
+      "evidence": "There is variability in step length across multiple cycles (normalized to -3 to 3 degrees).",
+      "cue": "Ensure each step covers the same distance as the previous one.",
+      "drill": "Perform single-leg stance with eyes closed, stepping forward and backward while maintaining balance."
+    }
+  ],
+  "summary": "The data indicates several biomechanical irregularities that could be addressed through targeted exercises to improve hip flexion range of motion, knee extension strength, and step consistency."
+}
+```
+
+This JSON output identifies three specific faults based on the provided keypoints, provides a measurable description for each fault, suggests a corrective cue, and offers a short drill to address the issue.
+

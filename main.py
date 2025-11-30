@@ -6,24 +6,23 @@ from pathlib import Path
 import numpy as np
 
 from estimate_pose import extract_pose_and_swing_frames
-from swingnet_inference import load_swingnet, run_swingnet, get_best_event_frames, save_debug_frames
-from fault_detectors import (detect_early_extension,
-                             detect_sway_or_slide,
-                             detect_over_the_top,
-                             detect_casting,
-                             detect_chicken_wing,
-                             detect_head_movement)
+from swingnet_inference import (load_swingnet, run_swingnet_sliding,
+                                get_best_event_frames, save_debug_frames)
+from fault_detectors import (detect_early_extension, detect_sway_or_slide,
+                             detect_over_the_top, detect_casting,
+                             detect_chicken_wing, detect_head_movement)
 from llm_feedback import generate_feedback
 
+# NEW: PRN-Lite
+from prn_lite import refine_keypoints_prn_lite, refine_events_with_keypoints
 
 OUTPUT_DIR = "pipeline_out"
 SWINGNET_CKPT = "models/swingnet_1800.pth.tar"
-SWINGNET_MIN_CONF = 0.10
 
 
 def swing_was_detected(event_frames):
     required = {"Address", "Top", "Impact"}
-    return required.issubset(event_frames.keys())
+    return required.issubset(set(event_frames.keys()))
 
 
 def save_json(obj, path):
@@ -31,86 +30,91 @@ def save_json(obj, path):
         json.dump(obj, f, indent=2)
 
 
-def main(video_path, seq_len=128, device="cpu"):
+def main(video_path, seq_len=None, device="cpu", model_seq_len=64, stride=None):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-    print("\n🎬 Step 1 — Extracting frames & pose keypoints…")
+    print("Step 1 — Read video, build two streams (swingnet frames + mediapipe crops)")
     keypoints_seq, frames_for_swingnet = extract_pose_and_swing_frames(video_path, seq_len=seq_len)
 
-    if keypoints_seq is None:
-        print("❌ ERROR: Could not extract video frames.")
+    if keypoints_seq is None or frames_for_swingnet is None:
+        print("Failed to read video or no frames.")
         return
 
-    print("Keypoints:", keypoints_seq.shape)
-    print("SwingNet frames:", frames_for_swingnet.shape)
+    print("Frames for SwingNet:", frames_for_swingnet.shape)
+    print("Keypoints seq shape:", keypoints_seq.shape)
 
+    # Save debug frames for inspection (first N)
     save_debug_frames(frames_for_swingnet, out_dir=os.path.join(OUTPUT_DIR, "debug_frames"))
 
-
-    print("\n⛳ Step 2 — Loading SwingNet")
+    print("Step 2 — Load SwingNet")
     model = load_swingnet(SWINGNET_CKPT, device=device)
 
+    print("Step 3 — Sliding window SwingNet inference (seq_len=%d)" % model_seq_len)
+    agg_probs = run_swingnet_sliding(model, frames_for_swingnet, model_seq_len=model_seq_len, stride=stride, device=device)
+    print("Aggregated probs shape:", agg_probs.shape)
+    np.save(os.path.join(OUTPUT_DIR, "agg_probs.npy"), agg_probs)
 
-    print("\n🔎 Step 3 — Running SwingNet inference…")
-    probs, preds = run_swingnet(model, frames_for_swingnet, device=device)
+    print("Step 4 — Peak selection for event frames (SwingNet peaks)")
+    swingnet_event_frames = get_best_event_frames(agg_probs, min_confidence=0.10)
+    print("SwingNet event frames:", dict(swingnet_event_frames))
+    save_json(dict(swingnet_event_frames), os.path.join(OUTPUT_DIR, "swingnet_event_frames_raw.json"))
 
+    # -------------------------
+    # PRN-Lite: refine keypoints
+    # -------------------------
+    print("Step 4b — Refining MediaPipe keypoints with PRN-Lite smoothing...")
+    refined_kps = refine_keypoints_prn_lite(keypoints_seq)
+    np.save(os.path.join(OUTPUT_DIR, "refined_keypoints.npy"), refined_kps)
 
-    print("\n📌 Step 4 — Selecting event frames…")
-    event_frames = get_best_event_frames(probs, min_confidence=SWINGNET_MIN_CONF)
-    print("Detected events:", dict(event_frames))
+    # -------------------------
+    # Event refinement using keypoints
+    # -------------------------
+    print("Step 4c — Refining SwingNet events with keypoint signals...")
+    refined_events = refine_events_with_keypoints(swingnet_event_frames, refined_kps)
+    print("Refined event frames:", refined_events)
+    save_json(refined_events, os.path.join(OUTPUT_DIR, "event_frames_refined.json"))
 
-    save_json(dict(event_frames), os.path.join(OUTPUT_DIR, "event_frames.json"))
-
-
-    if not swing_was_detected(event_frames):
-        print("\n⚠ No valid full swing detected. Skipping LLM phase.")
+    if not swing_was_detected(refined_events):
+        print("No full swing detected. Saving partial results and aborting LLM.")
+        save_json({"event_frames": dict(refined_events)}, os.path.join(OUTPUT_DIR, "result.json"))
         return
 
-
-    print("\n🧠 Step 5 — Rule-based biomechanics analysis…")
+    print("Step 5 — Run rule-based detectors for corroboration (use refined keypoints & refined events)")
     faults = []
-
-    # early extension
-    ee, ee_score = detect_early_extension(keypoints_seq, event_frames.get("Top"), event_frames.get("Impact"))
+    ee, ee_score = detect_early_extension(refined_kps, top_frame=refined_events.get("Top"), impact_frame=refined_events.get("Impact"))
     if ee: faults.append(("early_extension", ee_score))
-
-    # sway/slide
-    sw, sw_score = detect_sway_or_slide(keypoints_seq, event_frames.get("Address"), event_frames.get("Impact"))
-    if sw: faults.append((sw, sw_score))
-
-    # OTT
-    ott, ott_score = detect_over_the_top(keypoints_seq, event_frames.get("Top"))
+    label, score = detect_sway_or_slide(refined_kps, address_frame=refined_events.get("Address"), impact_frame=refined_events.get("Impact"))
+    if label: faults.append((label, score))
+    ott, ott_score = detect_over_the_top(refined_kps, top_frame=refined_events.get("Top"))
     if ott: faults.append(("over_the_top", ott_score))
-
-    # casting
-    cast, cast_score = detect_casting(keypoints_seq, event_frames.get("Top"))
+    cast, cast_score = detect_casting(refined_kps, top_frame=refined_events.get("Top"))
     if cast: faults.append(("casting", cast_score))
-
-    # chicken wing
-    wing, wing_score = detect_chicken_wing(keypoints_seq, event_frames.get("Impact"))
-    if wing: faults.append(("chicken_wing", wing_score))
-
-    # head movement
-    head, head_score = detect_head_movement(keypoints_seq, event_frames.get("Address"), event_frames.get("Impact"))
+    ch, ch_score = detect_chicken_wing(refined_kps, impact_frame=refined_events.get("Impact"))
+    if ch: faults.append(("chicken_wing", ch_score))
+    head, head_score = detect_head_movement(refined_kps, address_frame=refined_events.get("Address"), impact_frame=refined_events.get("Impact"))
     if head: faults.append(("head_movement", head_score))
 
-    print("Biomechanics faults:", faults)
-    save_json({"faults": faults}, os.path.join(OUTPUT_DIR, "rule_faults.json"))
+    print("Rule-based faults:", faults)
+    save_json({"rule_faults": faults}, os.path.join(OUTPUT_DIR, "rule_faults.json"))
 
+    print("Step 6 — Generate evidence-grounded feedback via LLM (Ollama/OpenAI)")
+    coaching = generate_feedback(refined_events, refined_kps, prefer_http=True, model="qwen2.5")
+    print("LLM produced response (truncated):", str(coaching)[:300])
 
-    print("\n💬 Step 6 — Generating LLM feedback…")
-    coaching = generate_feedback(event_frames, keypoints_seq)
-
+    result = {
+        "event_frames": dict(refined_events),
+        "rule_faults": faults,
+        "coaching": coaching
+    }
+    save_json(result, os.path.join(OUTPUT_DIR, "result.json"))
     with open(os.path.join(OUTPUT_DIR, "coaching.txt"), "w", encoding="utf-8") as f:
-        f.write(coaching)
+        f.write(str(coaching))
 
-    print("\n✅ Pipeline complete! Results saved to:", OUTPUT_DIR)
+    print("Pipeline complete. Results saved to", OUTPUT_DIR)
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python main.py <video>")
+        print("Usage: python main.py path/to/video.mp4")
         sys.exit(1)
-
-    video_path = sys.argv[1]
-    main(video_path)
+    video = sys.argv[1]
+    main(video, seq_len=None, device="cpu", model_seq_len=64, stride=32)
