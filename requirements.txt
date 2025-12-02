@@ -1,14 +1,3 @@
-opencv-python
 mediapipe
-torch
-torchvision
+opencv-python
 numpy
-requests
-tqdm
-TTS
-scipy
-
-
-ffmpeg-python
-ffmpeg
-pytest
