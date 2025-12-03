@@ -15,24 +15,14 @@ This repository contains a golf-swing pose extraction prototype. The project use
 1. Create a conda virtual environment
     - Ensure that the python version is either 3.10 or 3.11 to make it compatible for mediapipe pose
 
-2. Install Pytorch
+2. Install Pytorch, ensure that it is the CPU ONLY version!
     - pip install torch torchvision
 
-
-
-2. Install mediapipe
-    - pip install mediapipe
-
-2. Activate the conda virtual environment 
+3. Activate the conda virtual environment 
     - conda activate "E:\year 3\FYP\prototype git\FYP-AI-Golf-Assistant\.conda"
 
-3. install the dependencies in requirements.txt with pip
+4. install the dependencies in requirements.txt with pip
     - pip install -r requirements.txt
-
-4. install the pytorch dependencies with conda **depending on the hardware**
-    - conda install -c pytorch pytorch torchvision torchaudio cpuonly -y (for CPU only)
-    OR
-    - conda install -c pytorch -c nvidia pytorch torchvision torchaudio pytorch-cuda=11.8 -y (for GPU)
 
 5. Install coqui TTS 
     - pip install TTS

@@ -1,4 +1,3 @@
-# llm_feedback.py
 import json
 import requests
 import shutil
@@ -13,12 +12,12 @@ def ollama_http_available(url="http://localhost:11434"):
         return False
 
 def _kp_snippet_for_events(kps, events):
-    T = kps.shape[0]
+    num_frames = kps.shape[0]
     snippet = {}
     for ev, idx in events.items():
-        idx = int(idx)
-        s = max(0, idx-1); e = min(T-1, idx+1)
-        snippet[ev] = kps[s:e+1].tolist()
+        start_idx = int(idx)
+        end_idx = max(0, idx-1); e = min(num_frames-1, idx+1)
+        snippet[ev] = kps[start_idx:end_idx+1].tolist()
     return snippet
 
 def build_prompt(events, kps, faults):
@@ -32,7 +31,7 @@ Task:
 - For each fault, provide a short measurable justification, a short coaching cue, and one drill.
 - If no faults, provide one reinforcement statement and one improvement drill.
 Return JSON: {{ "faults":[{{"name":"", "evidence":"", "cue":"", "drill":""}}], "summary":"" }}
-Be concise and evidence-grounded.
+Be concise and evidence-grounded. Do not fabricate data and do not include any text outside the JSON structure. Do not include special characters.
 """
     return prompt
 
@@ -57,7 +56,7 @@ def generate_feedback_ollama_cli(events, kps, faults, model="qwen2.5"):
     proc = subprocess.run(["ollama", "run", model], input=prompt.encode("utf-8"),
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
     if proc.returncode != 0:
-        raise RuntimeError("ollama CLI failed: " + proc.stderr.decode("utf-8"))
+        raise RuntimeError("ollama CLI failed: " + proc.stderr.decode("utf-8", errors="replace"))
     return proc.stdout.decode("utf-8")
 
 def generate_feedback(events, kps, faults, prefer_http=True, model="qwen2.5"):

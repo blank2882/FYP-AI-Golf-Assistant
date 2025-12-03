@@ -7,6 +7,7 @@ from detector_pipeline import DetectorPipeline
 from swingnet_inference import SwingNetInferer, EVENT_LIST
 from llm_feedback import generate_feedback
 from faultDetect import detect_head_movement, detect_slide_or_sway
+from tts import generate_audio_feedback
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -281,6 +282,13 @@ class GolfAssistant:
         # 9) Generate LLM feedback
         coaching = generate_feedback(events_map, kps, faults, prefer_http=True, model="qwen2.5")
         print("LLM feedback (truncated):", str(coaching))
+        
+            # --- 6. Generate voice feedback ---
+        try:
+            audio_path = generate_audio_feedback(coaching)
+        except Exception as e:
+            print("Audio generation failed:", e)
+            audio_path = None
 
         return {
             'event_frames': event_frames,
@@ -288,4 +296,5 @@ class GolfAssistant:
             'annotated_video': self.annotated_out,
             'json': self.pred_json,
             'faults': faults,
+            'audio_feedback': audio_path,
         }

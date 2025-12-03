@@ -1,10 +1,11 @@
+# for object detection and pose estimation
+mediapipe
+
 # for golfdb
 opencv-python
 numpy
 pandas
 
-# for object detection and pose estimation
-mediapipe
 
 # for ollama LLM interaction
 requests
