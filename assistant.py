@@ -2,9 +2,13 @@ import os
 import json
 import cv2
 import numpy as np
+from torch import device
 from detector_pipeline import DetectorPipeline
 from swingnet_inference import SwingNetInferer, EVENT_LIST
 from llm_feedback import generate_feedback
+from faultDetect import detect_head_movement, detect_slide_or_sway
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class GolfAssistant:
@@ -263,13 +267,25 @@ class GolfAssistant:
 
         events_map = {EVENT_LIST[i]: int(ef) for i, ef in enumerate(event_frames)}
 
+        # simple rule-based faults
+        faults = []
+        head_flag, head_score = detect_head_movement(kps, address_frame=events_map.get("Address",0), impact_frame=events_map.get("Impact"))
+        if head_flag:
+            faults.append(("head_movement", head_score))
+        slide_label, slide_score = detect_slide_or_sway(kps, address_frame=events_map.get("Address",0), impact_frame=events_map.get("Impact"))
+        if slide_label:
+            faults.append((slide_label, slide_score))
+
+        print("Rule-based faults:", faults)
+
         # 9) Generate LLM feedback
-        coaching = generate_feedback(events_map, kps, prefer_http=True, model="qwen2.5")
-        print("LLM feedback (truncated):", str(coaching)[:500])
+        coaching = generate_feedback(events_map, kps, faults, prefer_http=True, model="qwen2.5")
+        print("LLM feedback (truncated):", str(coaching))
 
         return {
             'event_frames': event_frames,
             'confidences': confidences,
             'annotated_video': self.annotated_out,
             'json': self.pred_json,
+            'faults': faults,
         }
