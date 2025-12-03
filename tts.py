@@ -90,6 +90,16 @@ def _sanitize_text_for_tts(text: str) -> str:
         s = s.encode("ascii", "ignore").decode("ascii")
     except Exception:
         pass
+    # Collapse repeated punctuation (e.g. '...' or '!!!') to a single symbol
+    s = re.sub(r"[.]{2,}", ".", s)
+    s = re.sub(r"[!]{2,}", "!", s)
+    s = re.sub(r"[?]{2,}", "?", s)
+    # Remove stray isolated punctuation left after previous processing
+    s = re.sub(r"\s+[.!,?]\s+", ". ", s)
+    # Remove leading labels like 'Head movement:' or 'Cue:' at the start of lines
+    s = re.sub(r"(?m)^[A-Za-z][A-Za-z0-9 _\-]{0,40}:\s*", "", s)
+    # Remove parenthetical content which can confuse tokenizers (e.g. '(1.23)')
+    s = re.sub(r"\([^\)]{0,100}\)", "", s)
     return s
 
 
@@ -106,6 +116,8 @@ def _concatenate_wavs(wav_paths, out_path):
         tgt_framerate = w0.getframerate()
         tgt_params = w0.getparams()
         frames_list = [w0.readframes(w0.getnframes())]
+        logger.info("Chunk[0] params: channels=%d sampwidth=%d framerate=%d nframes=%d",
+                    tgt_nchannels, tgt_sampwidth, tgt_framerate, w0.getnframes())
 
     # Normalize subsequent WAVs to target params
     for p in wav_paths[1:]:
@@ -115,12 +127,15 @@ def _concatenate_wavs(wav_paths, out_path):
                 sw = w.getsampwidth()
                 fr = w.getframerate()
                 data = w.readframes(w.getnframes())
+                logger.info("Chunk file %s params before convert: channels=%d sampwidth=%d framerate=%d nframes=%d",
+                            p, nch, sw, fr, w.getnframes())
 
                 # Convert sample width if needed
                 if sw != tgt_sampwidth:
                     try:
                         data = audioop.lin2lin(data, sw, tgt_sampwidth)
                         sw = tgt_sampwidth
+                        logger.info("Converted sample width for %s -> %d", p, sw)
                     except Exception as e:
                         logger.debug("Failed to convert sample width for %s: %s", p, e)
 
@@ -138,6 +153,7 @@ def _concatenate_wavs(wav_paths, out_path):
                             else:
                                 data = audioop.tostereo(data, tgt_sampwidth, 1, 1)
                         nch = tgt_nchannels
+                        logger.info("Converted channels for %s -> %d", p, nch)
                     except Exception as e:
                         logger.debug("Failed to convert channels for %s: %s", p, e)
 
@@ -145,10 +161,12 @@ def _concatenate_wavs(wav_paths, out_path):
                 if fr != tgt_framerate:
                     try:
                         data, _ = audioop.ratecv(data, tgt_sampwidth, tgt_nchannels, fr, tgt_framerate, None)
+                        logger.info("Resampled %s from %d->%d", p, fr, tgt_framerate)
                     except Exception as e:
                         logger.debug("Failed to resample %s from %d to %d: %s", p, fr, tgt_framerate, e)
-
                 frames_list.append(data)
+                logger.info("Chunk file %s final params: channels=%d sampwidth=%d framerate=%d len_bytes=%d",
+                            p, nch, sw, fr, len(data))
         except Exception as e:
             logger.warning("Skipping wav %s due to read/convert error: %s", p, e)
 
@@ -166,9 +184,67 @@ def generate_audio_feedback(text, output_path="./out/feedback.wav"):
     if not text:
         logger.warning("Empty text after sanitization; skipping TTS generation")
         return None
+    tmpdir = tempfile.mkdtemp(prefix="tts_chunks_")
 
-    # Split into sentences and group into chunks of ~250-300 chars to avoid tiny fragments
+    # First attempt: try a single TTS call for the whole sanitized text. This
+    # often avoids decoder instability and concatenation corruption.
+    single_path = os.path.join(tmpdir, "single.wav")
+    try:
+        tts.tts_to_file(text=text, file_path=single_path)
+        # Verify the produced WAV is readable. On Windows a transient file-lock
+        # by the TTS process or antivirus can cause PermissionError; retry a few
+        # times before giving up.
+        opened = False
+        last_exc = None
+        for attempt in range(10):
+            try:
+                with wave.open(single_path, "rb") as w:
+                    nframes = w.getnframes()
+                    if nframes > 0:
+                        opened = True
+                        break
+            except Exception as e:
+                last_exc = e
+                import time
+                time.sleep(0.15)
+
+        if opened:
+            # Move validated file to output and cleanup
+            for attempt in range(6):
+                try:
+                    shutil.move(single_path, output_path)
+                    break
+                except PermissionError as pe:
+                    logger.debug("PermissionError moving single.wav (attempt %d): %s", attempt, pe)
+                    import time
+                    time.sleep(0.15)
+            try:
+                shutil.rmtree(tmpdir)
+            except Exception:
+                pass
+            logger.info("TTS single-call succeeded; wrote %s", output_path)
+            return output_path
+        else:
+            logger.warning("Single-call TTS produced unreadable WAV after retries: %s", last_exc)
+    except Exception as e:
+        logger.info("Single-call TTS failed, falling back to chunking: %s", e)
+
+    # Split into sentences and group into chunks of ~180-200 chars to avoid tiny fragments
     sentences = re.split(r'(?<=[.!?])\s+', text)
+    # remove punctuation-only or extremely short fragments that cause decoder issues
+    filtered = []
+    for s in sentences:
+        s_strip = s.strip()
+        if not s_strip:
+            continue
+        # drop fragments that are only punctuation or <=2 chars (e.g. '.' or '"')
+        if re.fullmatch(r'[\W_]+', s_strip) or len(s_strip) <= 2:
+            continue
+        filtered.append(s_strip)
+    if not filtered:
+        logger.warning("All sentences filtered out as punctuation/short; skipping TTS")
+        return None
+    sentences = filtered
     chunks = []
     cur = ""
     for s in sentences:
@@ -183,9 +259,45 @@ def generate_audio_feedback(text, output_path="./out/feedback.wav"):
     if cur:
         chunks.append(cur)
 
-    tmpdir = tempfile.mkdtemp(prefix="tts_chunks_")
+    # avoid too many tiny chunks (accelerates decode and reduces overhead)
+    # use smaller count and smaller chunk size to reduce decoder stress
+    MAX_CHUNKS = 4
+    TARGET_CHUNK_CHARS = 200
+    # create new merged list if needed to keep chunk sizes reasonable
+    if len(chunks) > MAX_CHUNKS:
+        logger.info("Too many TTS chunks (%d) — merging into %d chunks", len(chunks), MAX_CHUNKS)
+        merged = ["" for _ in range(MAX_CHUNKS)]
+        for c in chunks:
+            # put next chunk into the smallest merged bucket
+            lens = [len(m) for m in merged]
+            idx = int(lens.index(min(lens)))
+            merged[idx] = (merged[idx] + " " + c).strip()
+        # ensure merged chunks respect TARGET_CHUNK_CHARS by further merging/splitting if needed
+        final = []
+        cur = ""
+        for m in merged:
+            if not m:
+                continue
+            if len(cur) + len(m) + 1 <= TARGET_CHUNK_CHARS:
+                cur = (cur + " " + m).strip()
+            else:
+                if cur:
+                    final.append(cur)
+                cur = m
+        if cur:
+            final.append(cur)
+        # if final exceeds MAX_CHUNKS, merge evenly
+        if len(final) > MAX_CHUNKS:
+            merged2 = ["" for _ in range(MAX_CHUNKS)]
+            for i, c in enumerate(final):
+                merged2[i % MAX_CHUNKS] += (" " + c).strip()
+            chunks = [m.strip() for m in merged2 if m.strip()]
+        else:
+            chunks = final
+
     wav_paths = []
     try:
+        logger.info("Sanitized TTS text: %s", text)
         for i, chunk in enumerate(chunks):
             chunk_path = os.path.join(tmpdir, f"chunk_{i}.wav")
             try:

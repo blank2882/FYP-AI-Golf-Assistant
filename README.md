@@ -15,11 +15,12 @@ This repository contains a golf-swing pose extraction prototype. The project use
 1. Create a conda virtual environment
     - Ensure that the python version is either 3.10 or 3.11 to make it compatible for mediapipe pose
 
-2. Install Pytorch, ensure that it is the CPU ONLY version!
+2. Activate the conda virtual environment 
+    - conda activate "E:\year 3\FYP\prototype git\FYP-AI-Golf-Assistant\.conda"
+
+3. Install Pytorch, ensure that it is the CPU ONLY version!
     - pip install torch torchvision
 
-3. Activate the conda virtual environment 
-    - conda activate "E:\year 3\FYP\prototype git\FYP-AI-Golf-Assistant\.conda"
 
 4. install the dependencies in requirements.txt with pip
     - pip install -r requirements.txt
@@ -30,7 +31,7 @@ This repository contains a golf-swing pose extraction prototype. The project use
 6. To test that the TTS is working
     - tts --text "Hello golfer!" --model_name tts_models/en/ljspeech/tacotron2-DDC --out_path [audio file path] 
 
-7. Run main.py + the video of choice
+7. Run main.py 
 
  
 Notes

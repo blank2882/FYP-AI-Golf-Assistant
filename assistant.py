@@ -22,7 +22,7 @@ class GolfAssistant:
 
     def __init__(
         self,
-        video_path='./data/test_video.mp4',
+        video_path='./data/amateur_swings/swing5.mp4',
         weights_path='./golfdb/models/swingnet_1800.pth.tar',
         out_dir='./out',
         det_obj_model_path='./models/efficientdet_lite2.tflite',

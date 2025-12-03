@@ -28,10 +28,18 @@ def build_prompt(events, kps, faults):
 3) Rule-based faults detected: {json.dumps(faults, indent=2)}
 
 Task:
-- For each fault, provide a short measurable justification, a short coaching cue, and one drill.
-- If no faults, provide one reinforcement statement and one improvement drill.
-Return JSON: {{ "faults":[{{"name":"", "evidence":"", "cue":"", "drill":""}}], "summary":"" }}
-Be concise and evidence-grounded. Do not fabricate data and do not include any text outside the JSON structure. Do not include special characters.
+- For each fault, write 2-3 short sentences: (1) a concise, evidence-based justification (why this is a problem), (2) a short coaching cue (one short sentence), and (3) one short drill (one sentence).
+- If there are no faults, write one reinforcement sentence and one short improvement drill.
+
+Response format requirements (IMPORTANT):
+- Return plain English sentences only. Do NOT return JSON, code fences, or symbolic markup.
+- Keep the entire response under 200 words and use short, clear sentences suitable for text-to-speech.
+- Avoid long numeric sequences; round numeric evidence to two decimals if needed.
+
+Example (acceptable):
+"Head movement: Excessive head movement during the downswing reduces transfer of energy. Cue: Keep your head steady and eyes on the ball. Drill: Practice half-swings while holding a coin on your head."
+
+Be concise, evidence-grounded, and avoid fabricating data.
 """
     return prompt
 
