@@ -1,6 +1,6 @@
-from .dataloader import GolfDB, Normalize, ToTensor
-from .model import EventDetector
-from .util import *
+from dataloader import GolfDB, Normalize, ToTensor
+from model import EventDetector
+from util import *
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms

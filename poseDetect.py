@@ -10,6 +10,7 @@ import numpy as np
 
 model_path = "./models/pose_landmarker_heavy.task"
 
+# initialize mediapipe pose landmarker
 def create_pose_detector(model_path):
     # The create_from_options function accepts configuration options including running mode, display names locale, and pose landmark model asset path.
     baseOptions = mp.tasks.BaseOptions
@@ -28,6 +29,7 @@ def create_pose_detector(model_path):
     detector = poseLandmarker.create_from_options(options)
     return detector
 
+# function to visualize pose landmarks on an image
 def draw_landmarks_on_image(rgb_image, detection_result):
   pose_landmarks_list = detection_result.pose_landmarks
   annotated_image = np.copy(rgb_image)

@@ -73,9 +73,12 @@ class DetectorPipeline:
         for pose_landmarks in pose_landmarks_list:
             lm_list = []
             for lm in pose_landmarks:
-                lm_list.append({'x': float(getattr(lm, 'x', 0.0)),
-                                 'y': float(getattr(lm, 'y', 0.0)),
-                                 'z': float(getattr(lm, 'z', 0.0))})
+                lm_list.append({
+                    'x': float(getattr(lm, 'x', 0.0)),
+                    'y': float(getattr(lm, 'y', 0.0)),
+                    'z': float(getattr(lm, 'z', 0.0)),
+                    'visibility': float(getattr(lm, 'visibility', 1.0))
+                })
             metadata['pose'].append(lm_list)
 
         # Extract object detections

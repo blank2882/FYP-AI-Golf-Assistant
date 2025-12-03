@@ -5,6 +5,7 @@ This repository contains a golf-swing pose extraction prototype. The project use
 
 ## Quick start (recommended)
 
+
 ### Install the local LLM
 1. Install ollama (https://ollama.com/)
 
@@ -13,6 +14,11 @@ This repository contains a golf-swing pose extraction prototype. The project use
 ### Create the Conda virtual environment
 1. Create a conda virtual environment
     - Ensure that the python version is either 3.10 or 3.11 to make it compatible for mediapipe pose
+
+2. Install Pytorch
+    - pip install torch torchvision
+
+
 
 2. Install mediapipe
     - pip install mediapipe

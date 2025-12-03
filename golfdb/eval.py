@@ -1,11 +1,13 @@
-from .model import EventDetector
+from model import EventDetector
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from .dataloader import GolfDB, ToTensor, Normalize
+from dataloader import GolfDB, ToTensor, Normalize
 import torch.nn.functional as F
 import numpy as np
-from .util import correct_preds
+from util import correct_preds
+import os
+import sys
 
 
 def eval(model, split, seq_length, n_cpu, disp):
@@ -26,6 +28,7 @@ def eval(model, split, seq_length, n_cpu, disp):
 
     for i, sample in enumerate(data_loader):
         images, labels = sample['images'], sample['labels']
+        device = next(model.parameters()).device
         # full samples do not fit into GPU memory so evaluate sample in 'seq_length' batches
         batch = 0
         while batch * seq_length < images.shape[1]:
@@ -33,7 +36,7 @@ def eval(model, split, seq_length, n_cpu, disp):
                 image_batch = images[:, batch * seq_length:, :, :, :]
             else:
                 image_batch = images[:, batch * seq_length:(batch + 1) * seq_length, :, :, :]
-            logits = model(image_batch.cuda())
+            logits = model(image_batch.to(device))
             if batch == 0:
                 probs = F.softmax(logits.data, dim=1).cpu().numpy()
             else:
@@ -53,6 +56,8 @@ if __name__ == '__main__':
     seq_length = 64
     n_cpu = 6
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     model = EventDetector(pretrain=True,
                           width_mult=1.,
                           lstm_layers=1,
@@ -60,9 +65,16 @@ if __name__ == '__main__':
                           bidirectional=True,
                           dropout=False)
 
-    save_dict = torch.load('models/swingnet_1800.pth.tar')
+    weights_path = 'models/swingnet_1800.pth.tar'
+    if not os.path.exists(weights_path):
+        print("Weight file not found: {}".format(weights_path))
+        print("Please download 'swingnet_1800.pth.tar' and place it in the 'golfdb/models' directory.")
+        print("See golfdb/README.md for download links and instructions.")
+        sys.exit(1)
+
+    save_dict = torch.load(weights_path, map_location=device)
     model.load_state_dict(save_dict['model_state_dict'])
-    model.cuda()
+    model.to(device)
     model.eval()
     PCE = eval(model, split, seq_length, n_cpu, True)
     print('Average PCE: {}'.format(PCE))

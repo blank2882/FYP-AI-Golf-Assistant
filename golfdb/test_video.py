@@ -1,11 +1,10 @@
 import argparse
 import cv2
 import torch
-import time
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-from .eval import ToTensor, Normalize
-from .model import EventDetector
+from eval import ToTensor, Normalize
+from model import EventDetector
 import numpy as np
 import torch.nn.functional as F
 
@@ -65,69 +64,49 @@ if __name__ == '__main__':
     args = parser.parse_args()
     seq_length = args.seq_length
 
-    start_all = time.time()
-    print(f'[{time.strftime("%H:%M:%S")}] Preparing video: {args.path}')
+    print('Preparing video: {}'.format(args.path))
 
-    t0 = time.time()
     ds = SampleVideo(args.path, transform=transforms.Compose([ToTensor(),
                                 Normalize([0.485, 0.456, 0.406],
                                           [0.229, 0.224, 0.225])]))
-    print(f'[{time.strftime("%H:%M:%S")}] SampleVideo prepared (took {time.time()-t0:.2f}s)')
 
-    t0 = time.time()
     dl = DataLoader(ds, batch_size=1, shuffle=False, drop_last=False)
-    print(f'[{time.strftime("%H:%M:%S")}] DataLoader created (took {time.time()-t0:.2f}s)')
 
-    t0 = time.time()
-    print(f'[{time.strftime("%H:%M:%S")}] Instantiating model...')
     model = EventDetector(pretrain=True,
                           width_mult=1.,
                           lstm_layers=1,
                           lstm_hidden=256,
                           bidirectional=True,
                           dropout=False)
-    print(f'[{time.strftime("%H:%M:%S")}] Model instantiated (took {time.time()-t0:.2f}s)')
 
-    t0 = time.time()
     try:
-        save_dict = torch.load('models/swingnet_1800.pth.tar')
-        ckpt_msg = 'checkpoint loaded'
-    except Exception as e:
-        save_dict = None
-        ckpt_msg = f'model weights not found: {e}'
-    print(f'[{time.strftime("%H:%M:%S")}] Checkpoint step (took {time.time()-t0:.2f}s): {ckpt_msg}')
+        save_dict = torch.load('./models/swingnet_1800.pth.tar', map_location=torch.device('cpu'))
+    except:
+        print("Model weights not found. Download model weights and place in 'models' folder. See README for instructions")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f'[{time.strftime("%H:%M:%S")}] Using device: {device}')
-    if save_dict is not None:
-        model.load_state_dict(save_dict['model_state_dict'])
-        print(f'[{time.strftime("%H:%M:%S")}] Weights loaded into model')
+    print('Using device:', device)
+    model.load_state_dict(save_dict['model_state_dict'])
     model.to(device)
     model.eval()
+    print("Loaded model weights")
 
-    print(f'[{time.strftime("%H:%M:%S")}] Testing...')
-    for sample_i, sample in enumerate(dl):
-        t_sample = time.time()
+    print('Testing...')
+    for sample in dl:
         images = sample['images']
-        print(f'[{time.strftime("%H:%M:%S")}] Sample {sample_i}: frames={images.shape[1]}')
         # full samples do not fit into GPU memory so evaluate sample in 'seq_length' batches
         batch = 0
         while batch * seq_length < images.shape[1]:
-            t_batch = time.time()
             if (batch + 1) * seq_length > images.shape[1]:
                 image_batch = images[:, batch * seq_length:, :, :, :]
             else:
                 image_batch = images[:, batch * seq_length:(batch + 1) * seq_length, :, :, :]
-            # move to device
-            image_batch = image_batch.to(device)
-            logits = model(image_batch)
+            logits = model(image_batch.to(device))
             if batch == 0:
                 probs = F.softmax(logits.data, dim=1).cpu().numpy()
             else:
                 probs = np.append(probs, F.softmax(logits.data, dim=1).cpu().numpy(), 0)
-            print(f'[{time.strftime("%H:%M:%S")}] Sample {sample_i} batch {batch} processed (took {time.time()-t_batch:.2f}s)')
             batch += 1
-        print(f'[{time.strftime("%H:%M:%S")}] Sample {sample_i} total processing time {time.time()-t_sample:.2f}s')
 
     events = np.argmax(probs, axis=0)[:-1]
     print('Predicted event frames: {}'.format(events))
@@ -136,7 +115,7 @@ if __name__ == '__main__':
     confidence = []
     for i, e in enumerate(events):
         confidence.append(probs[e, i])
-    print('Condifence: {}'.format([np.round(c, 3) for c in confidence]))
+    print('Confidence: {}'.format([np.round(c, 3) for c in confidence]))
 
     for i, e in enumerate(events):
         cap.set(cv2.CAP_PROP_POS_FRAMES, e)

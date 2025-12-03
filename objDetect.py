@@ -34,64 +34,8 @@ def create_object_detector(detObj_model_path):
     # initialize the object detector as per the specified options
     detector = objectDetector.create_from_options(options)
     return detector
-
-# # prepare to process video frames
-# def process_frame(detector, frame=None, timestamp=None, video_path=None):
-#     """Process either a single frame or an entire video.
-
-#     If `frame` is provided (an OpenCV BGR numpy array), this function runs
-#     detection for that single frame using `timestamp` (ms) and returns the
-#     visualized frame. If `frame` is None, it will read and process the
-#     video at `video_path` (or the module-level `video_path` if not provided)
-#     and display frames in a window.
-#     """
-#     # If a single frame was provided, process and return it.
-#     if frame is not None:
-#         # Accept timestamps in seconds or milliseconds; test provides integer 0.
-#         ts_ms = int(timestamp) if timestamp is not None else 0
-#         # Convert the OpenCV BGR image to RGB for MediaPipe
-#         numpy_frame_from_opencv = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-#         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=numpy_frame_from_opencv)
-
-#         detection_result = detector.detect_for_video(mp_image, ts_ms)
-#         out_frame = visualize(frame, detection_result)
-#         return out_frame
-
-#     # Otherwise, process the full video from the given path.
-#     vp = video_path if video_path else globals().get("video_path")
-#     if not vp:
-#         raise ValueError("No video path provided for full-video processing")
-
-#     # Use OpenCV’s VideoCapture to load the input video.
-#     cap = cv2.VideoCapture(vp)
-
-#     # Load the frame rate of the video using OpenCV’s CV_CAP_PROP_FPS
-#     # You’ll need it to calculate the timestamp for each frame.
-#     fps = cap.get(cv2.CAP_PROP_FPS)
-#     frame_index = 0
-
-#     # Loop through each frame in the video using VideoCapture#read()
-#     while cap.isOpened():
-#         ret, frame = cap.read()
-#         if not ret:
-#             break
-#         # Calculate the timestamp (in milliseconds) for the current frame.
-#         frame_timestamp_ms = int(1000 * frame_index / fps) if fps and fps > 0 else 0
-#         # Convert the OpenCV BGR image to RGB.
-#         numpy_frame_from_opencv = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-#         # Convert the frame received from OpenCV to a MediaPipe’s Image object.
-#         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=numpy_frame_from_opencv)
-
-#         detection_result = detector.detect_for_video(mp_image, frame_timestamp_ms)
-#         frame = visualize(frame, detection_result)
-
-#         cv2.imshow('MediaPipe Object Detection', frame)
-#         if cv2.waitKey(5) & 0xFF == 27:
-#             break
-#         frame_index += 1
-#     cap.release()
-#     cv2.destroyAllWindows()
     
+# function to visualize detection results on an image
 def visualize(image, detection_result) -> np.ndarray:
     """Draws bounding boxes on the input image and return it.
     Args:

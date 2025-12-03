@@ -5,8 +5,7 @@ from .MobileNetV2 import MobileNetV2
 
 
 class EventDetector(nn.Module):
-    def __init__(self, pretrain, width_mult, lstm_layers, lstm_hidden,
-                 bidirectional=True, dropout=True, mobilenet_weights_path=None):
+    def __init__(self, pretrain, width_mult, lstm_layers, lstm_hidden, bidirectional=True, dropout=True):
         super(EventDetector, self).__init__()
         self.width_mult = width_mult
         self.lstm_layers = lstm_layers
@@ -15,14 +14,8 @@ class EventDetector(nn.Module):
         self.dropout = dropout
 
         net = MobileNetV2(width_mult=width_mult)
-        # Load mobilenet weights only when requested. Allow the caller to
-        # provide a path (absolute or relative). If no path provided, fall
-        # back to the legacy filename `mobilenet_v2.pth.tar` in cwd.
+        state_dict_mobilenet = torch.load(r'E:\year 3\FYP\prototype git\FYP-AI-Golf-Assistant\golfdb\mobilenet_v2.pth.tar', map_location=torch.device('cpu'))
         if pretrain:
-            weights_path = mobilenet_weights_path or 'mobilenet_v2.pth.tar'
-            # Ensure we map tensors to available device (CPU if no CUDA).
-            map_loc = 'cuda' if torch.cuda.is_available() else 'cpu'
-            state_dict_mobilenet = torch.load(weights_path, map_location=map_loc)
             net.load_state_dict(state_dict_mobilenet)
 
         self.cnn = nn.Sequential(*list(net.children())[0][:19])
@@ -37,11 +30,11 @@ class EventDetector(nn.Module):
             self.drop = nn.Dropout(0.5)
 
     def init_hidden(self, batch_size):
-        # Create hidden tensors on the same device as model parameters.
+        # allocate hidden state on the same device as the model parameters
         try:
             device = next(self.parameters()).device
         except StopIteration:
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            device = torch.device('cpu')
 
         if self.bidirectional:
             return (Variable(torch.zeros(2*self.lstm_layers, batch_size, self.lstm_hidden, device=device), requires_grad=True),
