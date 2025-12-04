@@ -18,9 +18,6 @@ envs/
 conda-env/
 logs/
 
-.pipeline/
-.pipeline_out/
-
 .__pycache__/
 .out/
 

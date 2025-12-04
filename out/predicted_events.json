@@ -3,50 +3,50 @@
     {
       "event_index": 0,
       "event_name": "Address",
-      "frame_index": 36,
-      "confidence": 0.06082025542855263
+      "frame_index": 3,
+      "confidence": 0.0052231959998607635
     },
     {
       "event_index": 1,
       "event_name": "Toe-Up",
-      "frame_index": 42,
-      "confidence": 0.22355294227600098
+      "frame_index": 36,
+      "confidence": 0.13613148033618927
     },
     {
       "event_index": 2,
       "event_name": "Mid-Backswing",
-      "frame_index": 52,
-      "confidence": 0.3167421023050944
+      "frame_index": 38,
+      "confidence": 0.8811087012290955
     },
     {
       "event_index": 3,
       "event_name": "Top",
-      "frame_index": 59,
-      "confidence": 0.0628908375898997
+      "frame_index": 53,
+      "confidence": 0.3928837776184082
     },
     {
       "event_index": 4,
       "event_name": "Mid-Downswing",
-      "frame_index": 65,
-      "confidence": 0.29178252816200256
+      "frame_index": 57,
+      "confidence": 0.7651990254720052
     },
     {
       "event_index": 5,
       "event_name": "Impact",
-      "frame_index": 68,
-      "confidence": 0.6043137907981873
+      "frame_index": 61,
+      "confidence": 0.4832538366317749
     },
     {
       "event_index": 6,
       "event_name": "Follow-Through",
-      "frame_index": 70,
-      "confidence": 0.2215823084115982
+      "frame_index": 62,
+      "confidence": 0.22115397453308105
     },
     {
       "event_index": 7,
       "event_name": "Finish",
-      "frame_index": 88,
-      "confidence": 0.11195144057273865
+      "frame_index": 72,
+      "confidence": 0.2658763825893402
     }
   ]
 }

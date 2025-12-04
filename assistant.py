@@ -22,7 +22,7 @@ class GolfAssistant:
 
     def __init__(
         self,
-        video_path='./data/amateur_swings/swing5.mp4',
+        video_path='./data/amateur_swings/swing1.mp4',
         weights_path='./golfdb/models/swingnet_1800.pth.tar',
         out_dir='./out',
         det_obj_model_path='./models/efficientdet_lite2.tflite',
@@ -283,7 +283,7 @@ class GolfAssistant:
         coaching = generate_feedback(events_map, kps, faults, prefer_http=True, model="qwen2.5")
         print("LLM feedback (truncated):", str(coaching))
         
-            # --- 6. Generate voice feedback ---
+         # --- 6. Generate voice feedback ---
         try:
             audio_path = generate_audio_feedback(coaching)
         except Exception as e:
