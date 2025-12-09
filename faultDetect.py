@@ -81,3 +81,38 @@ def detect_slide_or_sway(kps_seq: np.ndarray, address_frame: int = 0, impact_fra
     if score > lateral_threshold:  
         return ("slide", score)  
     return (None, score)  
+
+# calculate the raw metrics such as swing duration and X-factor stretch
+def compute_swing_metrics(kps_seq: np.ndarray, address_frame: int = 0, impact_frame: int = None):
+    # number of frames in the sequence
+    T = kps_seq.shape[0]  
+    # default impact frame is last frame if not provided
+    impact = T - 1 if impact_frame is None else impact_frame  
+    # compute swing duration in frames
+    swing_duration = impact - address_frame  
+    # get shoulder positions at address and impact frames
+    if _has_mediapipe_format(kps_seq):  
+        left_shoulder_address = kps_seq[address_frame, 11, :2]  
+        right_shoulder_address = kps_seq[address_frame, 12, :2]  
+        left_shoulder_impact = kps_seq[impact, 11, :2]  
+        right_shoulder_impact = kps_seq[impact, 12, :2]  
+    else:  
+        left_shoulder_address = kps_seq[address_frame, 5, :2]  
+        right_shoulder_address = kps_seq[address_frame, 6, :2]  
+        left_shoulder_impact = kps_seq[impact, 5, :2]  
+        right_shoulder_impact = kps_seq[impact, 6, :2]  
+    # compute shoulder vectors
+    shoulder_vec_address = right_shoulder_address - left_shoulder_address  
+    shoulder_vec_impact = right_shoulder_impact - left_shoulder_impact  
+    # compute angle between shoulder vectors using dot product
+    dot_product = np.dot(shoulder_vec_address, shoulder_vec_impact)  
+    norm_address = np.linalg.norm(shoulder_vec_address)  
+    norm_impact = np.linalg.norm(shoulder_vec_impact)  
+    cos_angle = dot_product / (norm_address * norm_impact + 1e-8)  
+    cos_angle = np.clip(cos_angle, -1.0, 1.0)  
+    angle_degrees = degrees(acos(cos_angle))  
+    # return computed metrics as a dictionary
+    return {
+        "swing_duration_frames": swing_duration,
+        "x_factor_degrees": angle_degrees
+    }

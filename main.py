@@ -1,5 +1,4 @@
 # file that orchestrates the golf assistant by combining various modules
-
 # import the necessary libraries
 import os
 import json
@@ -18,6 +17,8 @@ def main():
         print('Pipeline finished successfully. Outputs:')
         print('  Video:', result['annotated_video'])
         print('  JSON :', result['json'])
+        if 'timings' in result:
+            print('  Total Runtime:', f"{result['timings'].get('TOTAL', 0):.2f}s")
 
 
 if __name__ == '__main__':

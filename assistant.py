@@ -6,9 +6,10 @@ from torch import device
 from detector_pipeline import DetectorPipeline
 from swingnet_inference import SwingNetInferer, EVENT_LIST
 from llm_feedback import generate_feedback
-from faultDetect import detect_head_movement, detect_slide_or_sway
+from faultDetect import detect_head_movement, detect_slide_or_sway, compute_swing_metrics
 from tts import generate_audio_feedback
 import warnings
+import time
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
@@ -22,7 +23,7 @@ class GolfAssistant:
 
     def __init__(
         self,
-        video_path='./data/amateur_swings/swing1.mp4',
+        video_path='./data/test_video.mp4',
         weights_path='./golfdb/models/swingnet_1800.pth.tar',
         out_dir='./out',
         det_obj_model_path='./models/efficientdet_lite2.tflite',
@@ -49,6 +50,24 @@ class GolfAssistant:
         # ImageNet normalization constants used before feeding frames to SwingNet
         self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
+        # timing tracking
+        self.timing = {}
+
+    # helper method to print timing summary
+    def print_timing_summary(self):
+        """Print a formatted summary of all pipeline stage timings."""
+        print("\n" + "="*60)
+        print("PIPELINE RUNTIME SUMMARY")
+        print("="*60)
+        total_time = 0
+        for stage, duration in self.timing.items():
+            if stage != 'TOTAL':  # Skip the TOTAL entry to avoid double counting
+                total_time += duration
+                print(f"{stage:<35} {duration:>8.2f}s")
+        print("-"*60)
+        print(f"{'TOTAL RUNTIME':<35} {total_time:>8.2f}s")
+        print("="*60 + "\n")
 
     # run the detector pipeline and collect metadata
     def run_detector(self, every_n=1, display=False):
@@ -186,30 +205,44 @@ class GolfAssistant:
 
     # orchestrate the full pipeline
     def run(self):
+        # Overall pipeline timer
+        pipeline_start = time.time()
+        
         # 1) detection
+        stage_start = time.time()
         metadata = self.run_detector()
+        self.timing['1. Object & Pose Detection'] = time.time() - stage_start
+        
         if not metadata:
             print('No metadata produced by detector; exiting.')
             return {}
 
         # 2) cropping
+        stage_start = time.time()
         collected_rgb, collected_frame_idxs, collected_keypoints = self.build_crops_from_metadata(metadata)
+        self.timing['2. Crop Extraction'] = time.time() - stage_start
+        
         if len(collected_rgb) == 0:
             print('No crops extracted; exiting.')
             return {}
 
         # 3) load model using object-oriented inferer
+        stage_start = time.time()
         try:
             inferer = SwingNetInferer(self.weights_path)
         except Exception as e:
             print(f'Failed to load SwingNet weights: {e}')
             return {}
+        self.timing['3. SwingNet Model Loading'] = time.time() - stage_start
 
         # 4) prepare frames and inference
+        stage_start = time.time()
         frames_np = self.frames_to_swingnet_np(collected_rgb)
         probs = inferer.run_sliding(frames_np, model_seq_len=64)
+        self.timing['4. SwingNet Inference'] = time.time() - stage_start
 
         # 5) per-frame labels and per-class event frames
+        stage_start = time.time()
         labels = np.argmax(probs, axis=1)
         label_map = {}
         for i, fidx in enumerate(collected_frame_idxs):
@@ -227,8 +260,10 @@ class GolfAssistant:
             event_frames.append(int(frame_for_class))
             confidences.append(conf)
             label_map[frame_for_class] = (EVENT_LIST[c], conf)
+        self.timing['5. Label Processing'] = time.time() - stage_start
 
         # 6) save JSON summary
+        stage_start = time.time()
         summary = {'predicted_events': []}
         for i, ef in enumerate(event_frames):
             summary['predicted_events'].append({
@@ -239,17 +274,21 @@ class GolfAssistant:
             })
         with open(self.pred_json, 'w', encoding='utf-8') as f:
             json.dump(summary, f, indent=2)
+        self.timing['6. JSON Export'] = time.time() - stage_start
 
         # 7) annotate video with predicted labels and return summary
+        stage_start = time.time()
         print('Predicted event frames:', event_frames)
         print('Confidence:', [float(np.round(c, 3)) for c in confidences])
         print('Writing annotated video with predicted labels to', self.annotated_out)
         self.annotate_video_with_labels(self.annotated_base, self.annotated_out, label_map)
+        self.timing['7. Video Annotation'] = time.time() - stage_start
         
         # 8) Prepare keypoints sequence aligned to `collected_frame_idxs` and
         # build an `events` mapping of event_name -> frame_index for the LLM.
         # Convert keypoints to numpy array with shape (T, L, 3) where each
         # landmark is (x, y, visibility). If visibility isn't present set 1.0.
+        stage_start = time.time()
         import numpy as _np
         if len(collected_keypoints) > 0:
             # infer number of landmarks
@@ -276,19 +315,33 @@ class GolfAssistant:
         slide_label, slide_score = detect_slide_or_sway(kps, address_frame=events_map.get("Address",0), impact_frame=events_map.get("Impact"))
         if slide_label:
             faults.append((slide_label, slide_score))
+        # calculate the raw metrics such as swing duration and X-factor stretch
+        swing_metrics = compute_swing_metrics(kps, address_frame=events_map.get("Address",0), impact_frame=events_map.get("Impact"))
 
         print("Rule-based faults:", faults)
+        print("Swing metrics:", swing_metrics)
+        self.timing['8. Fault Detection'] = time.time() - stage_start
 
         # 9) Generate LLM feedback
+        stage_start = time.time()
         coaching = generate_feedback(events_map, kps, faults, prefer_http=True, model="qwen2.5")
         print("LLM feedback (truncated):", str(coaching))
+        self.timing['9. LLM Feedback Generation'] = time.time() - stage_start
         
-         # --- 6. Generate voice feedback ---
+        # 10. Generate voice feedback
+        stage_start = time.time()
         try:
             audio_path = generate_audio_feedback(coaching)
         except Exception as e:
             print("Audio generation failed:", e)
             audio_path = None
+        self.timing['10. Audio Synthesis'] = time.time() - stage_start
+
+        # Record total runtime
+        self.timing['TOTAL'] = time.time() - pipeline_start
+        
+        # Print timing summary
+        self.print_timing_summary()
 
         return {
             'event_frames': event_frames,
@@ -297,4 +350,5 @@ class GolfAssistant:
             'json': self.pred_json,
             'faults': faults,
             'audio_feedback': audio_path,
+            'timings': self.timing,
         }
