@@ -1,3 +1,4 @@
+# swingnet code inspired by https://github.com/wmcnally/golfdb
 import torch
 import numpy as np
 from golfdb.model import EventDetector

@@ -30,7 +30,12 @@ This repository contains a golf-swing pose extraction prototype. The project use
 6. To test that the TTS is working
     - tts --text "Hello golfer!" --model_name tts_models/en/ljspeech/tacotron2-DDC --out_path [audio file path] 
 
-7. Run main.py 
+7. Install FastAPI
+    - pip install "fastapi[standard]"
+    #### To test and run the FastAPI application
+    - pip install uvicorn 
+
+8. Run main.py 
 
  
 Notes
