@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>AI Golf Assistant - Analysis</title>
+    <meta name="description" content="" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="page-container analysis-page-container">
+      <div class="analysis-page">
+        <div class="card analysis-card">
+          <h1 class="title">Your Swing Analysis</h1>
+          <p class="subtitle">AI Golf coach</p>
+          
+          <div class="video-container" id="videoDisplay">
+            <video id="uploadedVideo" controls style="display: none; width: 100%; max-height: 300px; border-radius: 8px;"></video>
+            <p class="video-placeholder-text" id="videoPlaceholder">Your Swing Video</p>
+          </div>
+          
+          <div class="feedback-container">
+            <h3 class="feedback-title">Feedback</h3>
+            <div class="feedback-content">
+              <p class="feedback-text" id="feedbackText">Feedback goes here</p>
+            </div>
+          </div>
+          
+          <button class="btn btn-primary btn-large" id="analyzeBtn">Analyze Swing Video</button>
+          <button class="btn btn-secondary" id="saveBtn">Save analysis</button>
+          <button class="btn btn-secondary" id="backBtn">Upload New Video</button>
+          
+          <p class="footer-text">AI Golf Assistant - Your personal golf assistant</p>
+        </div>
+      </div>
+    </div>
+    
+    <script>
+      // Load video from session storage
+      window.addEventListener('DOMContentLoaded', function() {
+        const videoData = sessionStorage.getItem('uploadedVideo');
+        const videoName = sessionStorage.getItem('videoName');
+        
+        if (videoData) {
+          const video = document.getElementById('uploadedVideo');
+          const placeholder = document.getElementById('videoPlaceholder');
+          
+          video.src = videoData;
+          video.style.display = 'block';
+          placeholder.style.display = 'none';
+        }
+        
+        // Analyze button
+        document.getElementById('analyzeBtn').addEventListener('click', function() {
+          const feedbackText = document.getElementById('feedbackText');
+          feedbackText.textContent = 'Analyzing your swing... Please wait.';
+          
+          // Simulate analysis (replace with actual API call)
+          setTimeout(function() {
+            feedbackText.textContent = 'Great swing! Your stance is solid. Consider keeping your head down through impact for better consistency.';
+          }, 2000);
+        });
+        
+        // Save button
+        document.getElementById('saveBtn').addEventListener('click', function() {
+          alert('Analysis saved successfully!');
+        });
+        
+        // Back button
+        document.getElementById('backBtn').addEventListener('click', function() {
+          window.location.href = 'index.html';
+        });
+      });
+    </script>
+  </body>
+</html>
