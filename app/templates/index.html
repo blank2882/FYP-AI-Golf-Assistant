@@ -31,6 +31,16 @@
               </ul>
             </div>
 
+            <div class="preview-box">
+              <h3 class="preview-title">Video preview</h3>
+              <div class="preview-canvas-wrap">
+                <canvas id="videoPreviewCanvas" class="preview-canvas" width="640" height="360"></canvas>
+              </div>
+              <p class="preview-hint" id="previewHint">No video selected.</p>
+            </div>
+
+            <video id="videoPreview" class="preview-video" playsinline muted></video>
+
             <input type="file" id="videoInput" name="video" accept="video/*" style="display: none;" required />
             <button class="btn btn-primary" type="button" id="recordBtn">Record Video</button>
             <button class="btn btn-secondary" type="button" id="chooseFileBtn">Choose File</button>

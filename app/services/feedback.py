@@ -28,13 +28,30 @@ def _kp_snippet_for_events(kps, events):
 
 def build_prompt(events, kps, faults):
     snippet = _kp_snippet_for_events(kps, events)
+
+    selected_faults = faults
+    if isinstance(faults, list) and len(faults) > 0:
+        def _fault_score_tuple(f):
+            if isinstance(f, (list, tuple)):
+                score = float(f[1]) if len(f) > 1 else 0.0
+                conf = float(f[2]) if len(f) > 2 else 0.0
+                return (score, conf)
+            if isinstance(f, dict):
+                score = float(f.get("score", 0.0))
+                conf = float(f.get("confidence", 0.0))
+                return (score, conf)
+            return (0.0, 0.0)
+
+        best_fault = max(faults, key=_fault_score_tuple)
+        selected_faults = [best_fault]
+
     prompt = f"""You are an evidence-based golf coach. Inputs:
 1) Detected event frames (chronological): {json.dumps(events, indent=2)}
 2) Keypoint snippets near each event (x,y,vis normalized): {json.dumps(snippet, indent=2)}
-3) Rule-based faults detected: {json.dumps(faults, indent=2)}
+3) Rule-based faults detected (only the highest severity by score, then confidence): {json.dumps(selected_faults, indent=2)}
 
 Task:
-- For each fault, write 2-3 short sentences: (1) a concise, evidence-based justification (why this is a problem), (2) a short coaching cue (one short sentence), and (3) one short drill (one sentence).
+- For the single detected fault, write 2-3 short sentences: (1) a concise, evidence-based justification (why this is a problem), (2) a short coaching cue (one short sentence), and (3) one short drill (one sentence).
 - If there are no faults, write one reinforcement sentence and one short improvement drill.
 
 Response format requirements (IMPORTANT):
