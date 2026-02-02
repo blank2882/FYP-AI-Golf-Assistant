@@ -40,14 +40,17 @@ def create_object_detector(det_obj_model_path: Optional[str | os.PathLike] = Non
     return detector
 
 
-def visualize(image: np.ndarray, detection_result) -> np.ndarray:
+def visualize(image: np.ndarray, detection_result, scale_x: float = 1.0, scale_y: float = 1.0) -> np.ndarray:
     if detection_result is None:
         return image
 
     for detection in getattr(detection_result, "detections", []):
         bbox = detection.bounding_box
-        start_point = (int(bbox.origin_x), int(bbox.origin_y))
-        end_point = (int(bbox.origin_x + bbox.width), int(bbox.origin_y + bbox.height))
+        start_point = (int(bbox.origin_x * scale_x), int(bbox.origin_y * scale_y))
+        end_point = (
+            int((bbox.origin_x + bbox.width) * scale_x),
+            int((bbox.origin_y + bbox.height) * scale_y),
+        )
         cv2.rectangle(image, start_point, end_point, TEXT_COLOR, 3)
 
         if detection.categories:
@@ -56,8 +59,8 @@ def visualize(image: np.ndarray, detection_result) -> np.ndarray:
             probability = round(category.score, 2)
             result_text = category_name + " (" + str(probability) + ")"
             text_location = (
-                int(MARGIN + bbox.origin_x),
-                int(MARGIN + ROW_SIZE + bbox.origin_y),
+                int(MARGIN + bbox.origin_x * scale_x),
+                int(MARGIN + ROW_SIZE + bbox.origin_y * scale_y),
             )
             cv2.putText(
                 image,
@@ -119,6 +122,7 @@ class DetectorPipeline:
         self,
         obj_model_path: Optional[str | os.PathLike] = None,
         pose_model_path: Optional[str | os.PathLike] = None,
+        input_scale: float = 1.0,
         obj_detector=None,
         pose_detector=None,
     ):
@@ -132,19 +136,33 @@ class DetectorPipeline:
         else:
             self.pose_detector = create_pose_detector(pose_model_path)
 
+        self.input_scale = float(input_scale)
+
     def process_frame(self, bgr_frame: np.ndarray, timestamp_ms: int = 0, return_metadata: bool = False):
         if bgr_frame is None:
             raise ValueError("bgr_frame must be a valid OpenCV image")
 
-        rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
+        orig_h, orig_w = bgr_frame.shape[:2]
+        scale = self.input_scale if 0.5 <= self.input_scale <= 1.0 else 1.0
+        if scale != 1.0:
+            det_w = max(1, int(orig_w * scale))
+            det_h = max(1, int(orig_h * scale))
+            det_bgr = cv2.resize(bgr_frame, (det_w, det_h))
+        else:
+            det_bgr = bgr_frame
+            det_w, det_h = orig_w, orig_h
+
+        rgb_frame = cv2.cvtColor(det_bgr, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
         obj_result = self.obj_detector.detect_for_video(mp_image, int(timestamp_ms))
         pose_result = self.pose_detector.detect_for_video(mp_image, int(timestamp_ms))
 
-        annotated_rgb = draw_landmarks_on_image(rgb_frame, pose_result)
+        annotated_rgb = draw_landmarks_on_image(cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB), pose_result)
         annotated_bgr = cv2.cvtColor(annotated_rgb, cv2.COLOR_RGB2BGR)
-        annotated_bgr = visualize(annotated_bgr, obj_result)
+        scale_x = orig_w / float(det_w)
+        scale_y = orig_h / float(det_h)
+        annotated_bgr = visualize(annotated_bgr, obj_result, scale_x=scale_x, scale_y=scale_y)
 
         if not return_metadata:
             return annotated_bgr
@@ -172,10 +190,10 @@ class DetectorPipeline:
             metadata["objects"].append(
                 {
                     "bbox": {
-                        "origin_x": float(getattr(bbox, "origin_x", 0.0)),
-                        "origin_y": float(getattr(bbox, "origin_y", 0.0)),
-                        "width": float(getattr(bbox, "width", 0.0)),
-                        "height": float(getattr(bbox, "height", 0.0)),
+                        "origin_x": float(getattr(bbox, "origin_x", 0.0)) * scale_x,
+                        "origin_y": float(getattr(bbox, "origin_y", 0.0)) * scale_y,
+                        "width": float(getattr(bbox, "width", 0.0)) * scale_x,
+                        "height": float(getattr(bbox, "height", 0.0)) * scale_y,
                     },
                     "category_name": getattr(category, "category_name", None) if category else None,
                     "score": float(getattr(category, "score", 0.0)) if category else None,

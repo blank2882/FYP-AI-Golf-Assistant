@@ -19,6 +19,7 @@ from app.services.biomech import (
     detect_sway,
     detect_early_extension,
     detect_over_the_top,
+    classify_camera_angle,
     compute_swing_metrics,
 )
 from app.services.tts_service import generate_audio_feedback
@@ -34,6 +35,7 @@ class GolfAssistant:
         out_dir: str | os.PathLike | None = None,
         det_obj_model_path: str | os.PathLike | None = None,
         det_pose_model_path: str | os.PathLike | None = None,
+        det_input_scale: float | None = None,
         crop_expand: float = 0.25,
         target_size: Tuple[int, int] = (224, 224),
         auto_stride: bool = True,
@@ -51,6 +53,7 @@ class GolfAssistant:
         self.detector = DetectorPipeline(
             obj_model_path=det_obj_model_path or config.MEDIAPIPE_OBJ_MODEL,
             pose_model_path=det_pose_model_path or config.MEDIAPIPE_POSE_MODEL,
+            input_scale=det_input_scale if det_input_scale is not None else config.DETECTION_INPUT_SCALE,
         )
 
         self.crop_expand = crop_expand
@@ -346,6 +349,10 @@ class GolfAssistant:
             address_frame=events_map.get("Address", 0),
             top_frame=events_map.get("Top"),
             impact_frame=events_map.get("Impact"),
+        )
+        swing_metrics["camera_angle"] = classify_camera_angle(
+            kps,
+            address_frame=events_map.get("Address", 0),
         )
         self.timing["8. Fault Detection"] = time.time() - stage_start
 

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
-from math import acos, degrees
+from math import acos, degrees, atan2, cos, sin
 
 
 def _has_mediapipe_format(kps: np.ndarray) -> bool:
@@ -40,6 +40,41 @@ def compute_shoulder_width(kps_seq: np.ndarray, frame_index: int = 0) -> float:
     return float(width + 1e-8)
 
 
+def compute_torso_height(kps_seq: np.ndarray, frame_index: int = 0) -> float:
+    shoulders = compute_shoulder_centers(kps_seq)
+    hips = compute_hip_centers(kps_seq)
+    height = np.linalg.norm(shoulders[frame_index] - hips[frame_index])
+    return float(height + 1e-8)
+
+
+def classify_camera_angle(
+    kps_seq: np.ndarray,
+    address_frame: int = 0,
+    face_on_ratio: float = 0.6,
+) -> str:
+    """Classify camera angle as 'face_on' or 'down_the_line'."""
+    shoulder_width = compute_shoulder_width(kps_seq, address_frame)
+    torso_height = compute_torso_height(kps_seq, address_frame)
+    ratio = shoulder_width / torso_height
+    return "face_on" if ratio >= face_on_ratio else "down_the_line"
+
+
+def _perp_axis_from_shoulders(kps_seq: np.ndarray, frame_index: int = 0) -> np.ndarray:
+    if _has_mediapipe_format(kps_seq):
+        left = kps_seq[frame_index, 11, :2]
+        right = kps_seq[frame_index, 12, :2]
+    else:
+        left = kps_seq[frame_index, 5, :2]
+        right = kps_seq[frame_index, 6, :2]
+    vec = right - left
+    dx = float(vec[0])
+    dy = float(vec[1])
+    theta = atan2(dy, dx)
+    perp = np.array([-sin(theta), cos(theta)], dtype=np.float32)
+    norm = np.linalg.norm(perp) + 1e-8
+    return perp / norm
+
+
 def detect_head_movement(
     kps_seq: np.ndarray,
     address_frame: int = 0,
@@ -65,11 +100,11 @@ def detect_slide_or_sway(
     T = kps_seq.shape[0]
     impact = T - 1 if impact_frame is None else impact_frame
     hips = compute_hip_centers(kps_seq)
-    hip_x_address = hips[address_frame, 0]
-    hip_x_impact = hips[impact, 0]
-    dx = hip_x_impact - hip_x_address
+    perp = _perp_axis_from_shoulders(kps_seq, address_frame)
+    disp = hips[impact] - hips[address_frame]
+    lateral = float(abs(np.dot(disp, perp)))
     norm = compute_shoulder_width(kps_seq, address_frame)
-    score = float(abs(dx) / norm)
+    score = float(lateral / norm)
     if score > lateral_threshold:
         return ("slide", score)
     return (None, score)
@@ -84,11 +119,11 @@ def detect_sway(
     T = kps_seq.shape[0]
     top = T - 1 if top_frame is None else top_frame
     hips = compute_hip_centers(kps_seq)
-    hip_x_address = hips[address_frame, 0]
-    hip_x_top = hips[top, 0]
-    dx = hip_x_top - hip_x_address
+    perp = _perp_axis_from_shoulders(kps_seq, address_frame)
+    disp = hips[top] - hips[address_frame]
+    lateral = float(abs(np.dot(disp, perp)))
     norm = compute_shoulder_width(kps_seq, address_frame)
-    score = float(abs(dx) / norm)
+    score = float(lateral / norm)
     if score > sway_threshold:
         return ("sway", score)
     return (None, score)

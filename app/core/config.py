@@ -23,6 +23,9 @@ MEDIAPIPE_OBJ_MODEL = ROOT_MODELS_DIR / "efficientdet_lite2.tflite"
 MEDIAPIPE_POSE_MODEL = ROOT_MODELS_DIR / "pose_landmarker_heavy.task"
 SWINGNET_WEIGHTS = GOLFDB_MODELS_DIR / "swingnet_1800.pth.tar"
 
+# Downscale factor for detector input (0.75 preserves accuracy while reducing runtime)
+DETECTION_INPUT_SCALE = 0.65
+
 
 def ensure_directories() -> None:
     for path in [
