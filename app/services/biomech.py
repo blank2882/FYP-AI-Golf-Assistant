@@ -5,6 +5,34 @@ import numpy as np
 from math import acos, degrees, atan2, cos, sin
 
 
+# Threshold values for each fault type (used for confidence calculation)
+FAULT_THRESHOLDS = {
+    "head_movement": 0.04,
+    "slide": 0.12,
+    "sway": 0.10,
+    "early_extension": 0.06,
+    "over_the_top": 0.12,
+}
+
+
+def _score_to_confidence(fault_name: str, score: float, alpha: float = 6.0) -> float:
+    """
+    Convert a raw biomechanical score to a confidence 0-1.
+    This confidence represents  the strength of the fault detection. Not a probability.
+    
+    Uses sigmoid mapping to reflect:
+    - measurement noise near zero score
+    - rapid confidence increase once deviation exceeds threshold
+    - saturation at larger deviations
+    """
+    threshold = FAULT_THRESHOLDS.get(fault_name, 0.1)
+    if score <= 0:
+        return 0.0
+    relative_excess = (score - threshold) / (threshold + 1e-8)
+    confidence = 1.0 / (1.0 + np.exp(-alpha * relative_excess))
+    return float(np.clip(confidence, 0.0, 1.0))
+
+
 def _has_mediapipe_format(kps: np.ndarray) -> bool:
     return kps.shape[1] > 24
 

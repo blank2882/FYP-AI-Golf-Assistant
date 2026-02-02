@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class FaultItem(BaseModel):
     name: str
     score: float
+    confidence: float  # 0-1 confidence score (how confident the detection is)
 
 
 class AnalysisResponse(BaseModel):

@@ -45,11 +45,20 @@
             <h3 class="feedback-title">Detected Faults</h3>
             <div class="feedback-content">
               {% if faults and faults|length > 0 %}
-              <ul>
+              <div class="faults-list">
                 {% for f in faults %}
-                <li>{{ f.name }} (score: {{ '%.3f'|format(f.score) }})</li>
+                <div class="fault-item">
+                  <div class="fault-header">
+                    <span class="fault-name">{{ f.name }}</span>
+                    <span class="fault-confidence">{{ '%.0f'|format(f.confidence * 100) }}% confidence</span>
+                  </div>
+                  <div class="confidence-bar">
+                    <div class="confidence-fill" style="width: {{ f.confidence * 100 }}%"></div>
+                  </div>
+                  <div class="fault-score">Score: {{ '%.3f'|format(f.score) }}</div>
+                </div>
                 {% endfor %}
-              </ul>
+              </div>
               {% else %}
               <p class="feedback-text">No major faults detected.</p>
               {% endif %}

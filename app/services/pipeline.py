@@ -21,6 +21,7 @@ from app.services.biomech import (
     detect_over_the_top,
     classify_camera_angle,
     compute_swing_metrics,
+    _score_to_confidence,
 )
 from app.services.tts_service import generate_audio_feedback
 
@@ -312,14 +313,16 @@ class GolfAssistant:
             impact_frame=events_map.get("Impact"),
         )
         if head_flag:
-            faults.append(("head_movement", head_score))
+            confidence = _score_to_confidence("head_movement", head_score)
+            faults.append(("head_movement", head_score, confidence))
         slide_label, slide_score = detect_slide_or_sway(
             kps,
             address_frame=events_map.get("Address", 0),
             impact_frame=events_map.get("Impact"),
         )
         if slide_label:
-            faults.append((slide_label, slide_score))
+            confidence = _score_to_confidence(slide_label, slide_score)
+            faults.append((slide_label, slide_score, confidence))
 
         sway_label, sway_score = detect_sway(
             kps,
@@ -327,7 +330,8 @@ class GolfAssistant:
             top_frame=events_map.get("Top"),
         )
         if sway_label:
-            faults.append((sway_label, sway_score))
+            confidence = _score_to_confidence(sway_label, sway_score)
+            faults.append((sway_label, sway_score, confidence))
 
         early_label, early_score = detect_early_extension(
             kps,
@@ -335,7 +339,8 @@ class GolfAssistant:
             impact_frame=events_map.get("Impact"),
         )
         if early_label:
-            faults.append((early_label, early_score))
+            confidence = _score_to_confidence(early_label, early_score)
+            faults.append((early_label, early_score, confidence))
 
         ott_label, ott_score = detect_over_the_top(
             kps,
@@ -343,7 +348,8 @@ class GolfAssistant:
             impact_frame=events_map.get("Impact"),
         )
         if ott_label:
-            faults.append((ott_label, ott_score))
+            confidence = _score_to_confidence(ott_label, ott_score)
+            faults.append((ott_label, ott_score, confidence))
         swing_metrics = compute_swing_metrics(
             kps,
             address_frame=events_map.get("Address", 0),

@@ -31,7 +31,7 @@ def analyze(request: Request, video: UploadFile = File(...)):
     result = assistant.run()
 
     faults = result.get("faults", [])
-    fault_items = [{"name": f[0], "score": float(f[1])} for f in faults]
+    fault_items = [{"name": f[0], "score": float(f[1]), "confidence": float(f[2])} for f in faults]
 
     annotated_video = None
     if result.get("annotated_video"):
@@ -66,7 +66,7 @@ def analyze_api(video: UploadFile = File(...)):
     result = assistant.run()
 
     faults = result.get("faults", [])
-    fault_items = [FaultItem(name=f[0], score=float(f[1])) for f in faults]
+    fault_items = [FaultItem(name=f[0], score=float(f[1]), confidence=float(f[2])) for f in faults]
 
     response = AnalysisResponse(
         job_id=Path(run_dir).name,
