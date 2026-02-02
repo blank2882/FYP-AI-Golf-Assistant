@@ -5,7 +5,16 @@ mediapipe
 opencv-python
 numpy
 pandas
+torch
 
+# web app
+fastapi
+uvicorn
+python-multipart
+jinja2
 
 # for ollama LLM interaction
 requests
+
+# TTS
+TTS

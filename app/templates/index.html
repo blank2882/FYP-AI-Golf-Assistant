@@ -6,7 +6,7 @@
     <title>AI Golf Assistant</title>
     <meta name="description" content="" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="/static/css/style.css" />
   </head>
   <body>
     <div class="page-container">
@@ -14,30 +14,30 @@
         <div class="card">
           <h1 class="title">AI Golf Assistant</h1>
           <p class="subtitle">AI Golf coach</p>
-          
-          <div class="upload-section">
+
+          <form class="upload-section" action="/analyze" method="post" enctype="multipart/form-data">
             <h2 class="section-title">Upload your golf Swing Video</h2>
             <p class="section-description">
               Record your golf swing from the side view for best results. Our AI will analyze your form and provide personalized feedback.
             </p>
-            
+
             <div class="tips-box">
               <h3 class="tips-title">Tips for best results:</h3>
               <ul class="tips-list">
                 <li>Record from good lighting</li>
                 <li>Video camera clarity</li>
                 <li>Capture your full swing</li>
-                <li>Record in landscape mode (full-is</li>
-                <li>preferred) (facing right)</li>
+                <li>Record in landscape mode (facing right)</li>
               </ul>
             </div>
-            
-            <input type="file" id="videoInput" accept="video/*" style="display: none;">
-            <button class="btn btn-primary" id="recordBtn">Record Video</button>
-            <button class="btn btn-secondary" id="chooseFileBtn">Choose File</button>
-          </div>
+
+            <input type="file" id="videoInput" name="video" accept="video/*" style="display: none;" required />
+            <button class="btn btn-primary" type="button" id="recordBtn">Record Video</button>
+            <button class="btn btn-secondary" type="button" id="chooseFileBtn">Choose File</button>
+            <button class="btn btn-primary" type="submit">Analyze Swing</button>
+          </form>
         </div>
-        
+
         <div class="card steps-card">
           <div class="step">
             <div class="step-number">1</div>
@@ -47,7 +47,7 @@
             </div>
           </div>
         </div>
-        
+
         <div class="card steps-card">
           <div class="step">
             <div class="step-number">2</div>
@@ -57,7 +57,7 @@
             </div>
           </div>
         </div>
-        
+
         <div class="card steps-card">
           <div class="step">
             <div class="step-number">3</div>
@@ -67,11 +67,11 @@
             </div>
           </div>
         </div>
-        
+
         <p class="footer-text">AI Golf Assistant - Your personal golf assistant</p>
       </div>
     </div>
-    
-    <script src="./index.js"></script>
+
+    <script src="/static/js/index.js"></script>
   </body>
 </html>

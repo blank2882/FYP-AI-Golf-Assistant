@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -14,7 +15,8 @@ class EventDetector(nn.Module):
         self.dropout = dropout
 
         net = MobileNetV2(width_mult=width_mult)
-        state_dict_mobilenet = torch.load(r'E:\year 3\FYP\prototype git\FYP-AI-Golf-Assistant\golfdb\mobilenet_v2.pth.tar', map_location=torch.device('cpu'))
+        mobilenet_path = os.path.join(os.path.dirname(__file__), "mobilenet_v2.pth.tar")
+        state_dict_mobilenet = torch.load(mobilenet_path, map_location=torch.device('cpu'))
         if pretrain:
             net.load_state_dict(state_dict_mobilenet)
 

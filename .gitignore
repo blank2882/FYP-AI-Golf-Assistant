@@ -21,3 +21,7 @@ logs/
 .__pycache__/
 .out/
 
+# runtime artifacts
+/uploads/
+/outputs/
+

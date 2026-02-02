@@ -44,7 +44,6 @@ body {
   gap: 0;
 }
 
-/* Left Panel */
 .left-panel {
   flex: 1;
   background-color: #e8f5e9;
@@ -54,7 +53,6 @@ body {
   gap: 15px;
 }
 
-/* Right Panel */
 .right-panel {
   flex: 1;
   background-color: #2c2c2c;
@@ -64,7 +62,6 @@ body {
   align-items: flex-start;
 }
 
-/* Cards */
 .card {
   background: white;
   border-radius: 15px;
@@ -82,7 +79,6 @@ body {
   max-width: 450px;
 }
 
-/* Typography */
 .title {
   font-size: 24px;
   font-weight: 600;
@@ -110,7 +106,6 @@ body {
   margin-bottom: 20px;
 }
 
-/* Tips Box */
 .tips-box {
   background-color: #e3f2fd;
   border-radius: 10px;
@@ -145,7 +140,6 @@ body {
   color: #1976d2;
 }
 
-/* Buttons */
 .btn {
   width: 100%;
   padding: 12px 24px;
@@ -156,6 +150,9 @@ body {
   cursor: pointer;
   transition: all 0.3s ease;
   margin-bottom: 10px;
+  text-align: center;
+  display: inline-block;
+  text-decoration: none;
 }
 
 .btn-primary {
@@ -181,7 +178,6 @@ body {
   font-size: 17px;
 }
 
-/* Steps */
 .step {
   display: flex;
   align-items: center;
@@ -218,7 +214,6 @@ body {
   color: #666;
 }
 
-/* Video Container */
 .video-container {
   background-color: white;
   border-radius: 10px;
@@ -236,7 +231,6 @@ body {
   color: #999;
 }
 
-/* Feedback Container */
 .feedback-container {
   margin-bottom: 20px;
 }
@@ -264,7 +258,6 @@ body {
   color: #333;
 }
 
-/* Footer Text */
 .footer-text {
   font-size: 12px;
   color: #666;
@@ -276,21 +269,19 @@ body {
   color: #555;
 }
 
-/* Upload Section */
 .upload-section {
   margin-top: 10px;
 }
 
-/* Responsive Design */
 @media (max-width: 968px) {
   .container {
     flex-direction: column;
   }
-  
+
   .right-panel {
     background-color: #e8f5e9;
   }
-  
+
   .analysis-card {
     max-width: 100%;
   }
