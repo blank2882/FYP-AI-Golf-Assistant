@@ -29,6 +29,8 @@ class GolfAssistant:
         det_pose_model_path: str | os.PathLike | None = None,
         crop_expand: float = 0.25,
         target_size: Tuple[int, int] = (224, 224),
+        auto_stride: bool = True,
+        max_detector_stride: int = 2,
     ):
         self.video_path = video_path
         self.weights_path = str(weights_path or config.SWINGNET_WEIGHTS)
@@ -46,6 +48,8 @@ class GolfAssistant:
 
         self.crop_expand = crop_expand
         self.target_size = target_size
+        self.auto_stride = auto_stride
+        self.max_detector_stride = max(1, int(max_detector_stride))
 
         self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -60,6 +64,17 @@ class GolfAssistant:
         return total_time
 
     def run_detector(self, every_n: int = 1, display: bool = False):
+        if self.auto_stride:
+            try:
+                cap = cv2.VideoCapture(self.video_path)
+                fps = cap.get(cv2.CAP_PROP_FPS) or 0
+                cap.release()
+            except Exception:
+                fps = 0
+            # If video FPS is high, skip every other frame to reduce compute
+            if fps >= 45:
+                every_n = min(self.max_detector_stride, 2)
+
         os.makedirs(self.out_dir, exist_ok=True)
         processed_count, metadata = self.detector.process_video(
             self.video_path,
@@ -67,6 +82,7 @@ class GolfAssistant:
             output_path=self.annotated_base,
             collect_metadata=True,
             metadata_output_path=os.path.join(self.out_dir, "metadata.json"),
+            every_n=every_n,
         )
         return metadata
 
@@ -100,9 +116,6 @@ class GolfAssistant:
     def build_crops_from_metadata(self, metadata):
         if not metadata:
             return [], [], []
-
-        meta_map = {m["frame_index"]: m["metadata"] for m in metadata}
-
         cap = cv2.VideoCapture(self.video_path)
         if not cap.isOpened():
             raise RuntimeError(f"Unable to open video: {self.video_path}")
@@ -110,33 +123,38 @@ class GolfAssistant:
         collected_rgb = []
         collected_frame_idxs = []
         collected_keypoints = []
-        frame_idx = 0
-        while True:
+
+        # Seek directly to frames with metadata instead of decoding the full video
+        for item in metadata:
+            frame_idx = item["frame_index"]
+            md = item["metadata"]
+
+            used_bbox = None
+            best_score = 0.0
+            for obj in md.get("objects", []):
+                score = obj.get("score", 0.0) or 0.0
+                if score > best_score:
+                    best_score = score
+                    used_bbox = obj.get("bbox")
+
+            if used_bbox is None:
+                continue
+
+            poses = md.get("pose", []) or []
+            if len(poses) > 0:
+                primary_pose = poses[0]
+            else:
+                primary_pose = [{"x": 0.0, "y": 0.0, "z": 0.0} for _ in range(33)]
+
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
             if not ret:
-                break
-            if frame_idx in meta_map:
-                md = meta_map[frame_idx]
-                used_bbox = None
-                best_score = 0.0
-                for obj in md.get("objects", []):
-                    score = obj.get("score", 0.0) or 0.0
-                    if score > best_score:
-                        best_score = score
-                        used_bbox = obj.get("bbox")
+                continue
 
-                poses = md.get("pose", []) or []
-                if len(poses) > 0:
-                    primary_pose = poses[0]
-                else:
-                    primary_pose = [{"x": 0.0, "y": 0.0, "z": 0.0} for _ in range(33)]
-
-                if used_bbox is not None:
-                    rgb = self.crop_and_resize(frame, used_bbox)
-                    collected_rgb.append(rgb)
-                    collected_frame_idxs.append(frame_idx)
-                    collected_keypoints.append(primary_pose)
-            frame_idx += 1
+            rgb = self.crop_and_resize(frame, used_bbox)
+            collected_rgb.append(rgb)
+            collected_frame_idxs.append(frame_idx)
+            collected_keypoints.append(primary_pose)
 
         cap.release()
         return collected_rgb, collected_frame_idxs, collected_keypoints
