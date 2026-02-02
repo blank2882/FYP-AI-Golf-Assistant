@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -15,13 +15,57 @@
           <h1 class="title">AI Golf Assistant</h1>
           <p class="subtitle">AI Golf coach</p>
 
-          <form class="upload-section" action="/analyze" method="post" enctype="multipart/form-data">
+          <form
+            class="upload-section"
+            action="/analyze"
+            method="post"
+            enctype="multipart/form-data"
+          >
             <div class="section-header">
-              <h2 class="section-title"> Upload Your Golf Swing Video</h2>
+              <h2 class="section-title">Upload Your Golf Swing Video</h2>
               <p class="section-description">
-                Record your golf swing from the side view for best results. Our AI will analyze your form and provide personalized feedback.
+                Record your golf swing from the side view for best results. Our
+                AI will analyze your form and provide personalized feedback.
               </p>
             </div>
+
+            <div class="card steps-card">
+              <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                  <h3 class="step-title">Upload Video</h3>
+                  <p class="step-description">
+                    Select and upload your swing video
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="card steps-card">
+              <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                  <h3 class="step-title">AI Analysis</h3>
+                  <p class="step-description">
+                    The AI will analyze your swing mechanics
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="card steps-card">
+              <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                  <h3 class="step-title">Get Feedback</h3>
+                  <p class="step-description">
+                    Receive personalized improvement tips
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <br>
 
             <div class="tips-box">
               <h3 class="tips-title">Tips for best results:</h3>
@@ -36,7 +80,12 @@
             <div class="preview-box">
               <h3 class="preview-title">Video preview</h3>
               <div class="preview-canvas-wrap">
-                <canvas id="videoPreviewCanvas" class="preview-canvas" width="640" height="360"></canvas>
+                <canvas
+                  id="videoPreviewCanvas"
+                  class="preview-canvas"
+                  width="640"
+                  height="360"
+                ></canvas>
               </div>
               <p class="preview-hint" id="previewHint">No video selected.</p>
             </div>
@@ -44,51 +93,46 @@
             <div class="live-box" id="liveBox" hidden>
               <h3 class="preview-title">Live camera</h3>
               <div class="live-video-wrap">
-                <video id="liveVideo" class="live-video" playsinline muted></video>
+                <video
+                  id="liveVideo"
+                  class="live-video"
+                  playsinline
+                  muted
+                ></video>
               </div>
-              <p class="preview-hint" id="liveStatus">Waiting for camera permission...</p>
+              <p class="preview-hint" id="liveStatus">
+                Waiting for camera permission...
+              </p>
             </div>
 
-            <video id="videoPreview" class="preview-video" playsinline muted></video>
+            <video
+              id="videoPreview"
+              class="preview-video"
+              playsinline
+              muted
+            ></video>
 
-            <input type="file" id="videoInput" name="video" accept="video/*" style="display: none;" required />
-            <button class="btn btn-primary" type="button" id="recordBtn">Record Video</button>
-            <button class="btn btn-secondary" type="button" id="chooseFileBtn">Choose File</button>
+            <input
+              type="file"
+              id="videoInput"
+              name="video"
+              accept="video/*"
+              style="display: none"
+              required
+            />
+            <button class="btn btn-primary" type="button" id="recordBtn">
+              Record Video
+            </button>
+            <button class="btn btn-secondary" type="button" id="chooseFileBtn">
+              Choose File
+            </button>
             <button class="btn btn-primary" type="submit">Analyze Swing</button>
           </form>
         </div>
 
-        <div class="card steps-card">
-          <div class="step">
-            <div class="step-number">1</div>
-            <div class="step-content">
-              <h3 class="step-title">Upload Video</h3>
-              <p class="step-description">Select and upload your swing video</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="card steps-card">
-          <div class="step">
-            <div class="step-number">2</div>
-            <div class="step-content">
-              <h3 class="step-title">AI Analysis</h3>
-              <p class="step-description">The AI will analyze your swing mechanics</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="card steps-card">
-          <div class="step">
-            <div class="step-number">3</div>
-            <div class="step-content">
-              <h3 class="step-title">Get Feedback</h3>
-              <p class="step-description">Receive personalized improvement tips</p>
-            </div>
-          </div>
-        </div>
-
-        <p class="footer-text">AI Golf Assistant - Your personal golf assistant</p>
+        <p class="footer-text">
+          AI Golf Assistant - Your personal golf assistant
+        </p>
       </div>
     </div>
 

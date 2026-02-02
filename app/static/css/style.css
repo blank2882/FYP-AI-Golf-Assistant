@@ -493,18 +493,12 @@ body {
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
 }
 
-.fault-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
 .fault-name {
   font-weight: 700;
   font-size: 17px;
   color: #2c2c2c;
   text-transform: capitalize;
+  margin-bottom: 10px;
 }
 
 .fault-name::before {
@@ -513,13 +507,15 @@ body {
 }
 
 .fault-confidence {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
   color: white;
   padding: 6px 14px;
   border-radius: 20px;
   box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+  display: inline-block;
+  margin-bottom: 12px;
 }
 
 .confidence-bar {

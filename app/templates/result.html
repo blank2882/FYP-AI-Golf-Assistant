@@ -50,10 +50,8 @@
               <div class="faults-list">
                 {% for f in faults %}
                 <div class="fault-item">
-                  <div class="fault-header">
-                    <span class="fault-name">{{ f.name }}</span>
-                    <span class="fault-confidence">{{ '%.0f'|format(f.confidence * 100) }}% confidence</span>
-                  </div>
+                  <div class="fault-name">{{ f.name }}</div>
+                  <div class="fault-confidence">{{ '%.0f'|format(f.confidence * 100) }}% confidence</div>
                   <div class="confidence-bar">
                     <div class="confidence-fill" style="width: {{ f.confidence * 100 }}%"></div>
                   </div>
