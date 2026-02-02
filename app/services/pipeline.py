@@ -13,7 +13,14 @@ from app.core import config
 from app.services.pose_estimation import DetectorPipeline
 from app.services.temporal_seg import SwingNetInferer, EVENT_LIST
 from app.services.feedback import generate_feedback
-from app.services.biomech import detect_head_movement, detect_slide_or_sway, compute_swing_metrics
+from app.services.biomech import (
+    detect_head_movement,
+    detect_slide_or_sway,
+    detect_sway,
+    detect_early_extension,
+    detect_over_the_top,
+    compute_swing_metrics,
+)
 from app.services.tts_service import generate_audio_feedback
 
 
@@ -57,11 +64,20 @@ class GolfAssistant:
         self.timing: Dict[str, float] = {}
 
     def print_timing_summary(self):
-        total_time = 0
+        lines = []
+        lines.append("\n" + "=" * 60)
+        lines.append("PIPELINE RUNTIME SUMMARY")
+        lines.append("=" * 60)
+        total_time = 0.0
         for stage, duration in self.timing.items():
-            if stage != "TOTAL":
-                total_time += duration
-        return total_time
+            if stage == "TOTAL":
+                continue
+            total_time += duration
+            lines.append(f"{stage:<35} {duration:>8.2f}s")
+        lines.append("-" * 60)
+        lines.append(f"{'TOTAL RUNTIME':<35} {total_time:>8.2f}s")
+        lines.append("=" * 60 + "\n")
+        print("\n".join(lines))
 
     def run_detector(self, every_n: int = 1, display: bool = False):
         if self.auto_stride:
@@ -172,8 +188,16 @@ class GolfAssistant:
         fps = cap.get(cv2.CAP_PROP_FPS) or 30
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # type: ignore[attr-defined]
-        writer = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
+        writer = None
+        for codec in ("avc1", "H264", "mp4v"):
+            fourcc = cv2.VideoWriter_fourcc(*codec)  # type: ignore[attr-defined]
+            candidate = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
+            if candidate.isOpened():
+                writer = candidate
+                break
+        if writer is None or not writer.isOpened():
+            cap.release()
+            raise RuntimeError("Failed to open VideoWriter for annotated output")
 
         frame_idx = 0
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -293,9 +317,34 @@ class GolfAssistant:
         )
         if slide_label:
             faults.append((slide_label, slide_score))
+
+        sway_label, sway_score = detect_sway(
+            kps,
+            address_frame=events_map.get("Address", 0),
+            top_frame=events_map.get("Top"),
+        )
+        if sway_label:
+            faults.append((sway_label, sway_score))
+
+        early_label, early_score = detect_early_extension(
+            kps,
+            top_frame=events_map.get("Top"),
+            impact_frame=events_map.get("Impact"),
+        )
+        if early_label:
+            faults.append((early_label, early_score))
+
+        ott_label, ott_score = detect_over_the_top(
+            kps,
+            top_frame=events_map.get("Top"),
+            impact_frame=events_map.get("Impact"),
+        )
+        if ott_label:
+            faults.append((ott_label, ott_score))
         swing_metrics = compute_swing_metrics(
             kps,
             address_frame=events_map.get("Address", 0),
+            top_frame=events_map.get("Top"),
             impact_frame=events_map.get("Impact"),
         )
         self.timing["8. Fault Detection"] = time.time() - stage_start
@@ -318,6 +367,8 @@ class GolfAssistant:
         self.timing["10. Audio Synthesis"] = time.time() - stage_start
 
         self.timing["TOTAL"] = time.time() - pipeline_start
+        self.print_timing_summary()
+        print(f"Total processing time: {self.timing['TOTAL']:.2f}s")
 
         return {
             "event_frames": event_frames,

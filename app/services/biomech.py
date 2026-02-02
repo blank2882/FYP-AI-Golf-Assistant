@@ -19,6 +19,16 @@ def compute_hip_centers(kps_seq: np.ndarray) -> np.ndarray:
     return (left_hip + right_hip) / 2.0
 
 
+def compute_shoulder_centers(kps_seq: np.ndarray) -> np.ndarray:
+    if _has_mediapipe_format(kps_seq):
+        left_shoulder = kps_seq[:, 11, :2]
+        right_shoulder = kps_seq[:, 12, :2]
+    else:
+        left_shoulder = kps_seq[:, 5, :2]
+        right_shoulder = kps_seq[:, 6, :2]
+    return (left_shoulder + right_shoulder) / 2.0
+
+
 def compute_shoulder_width(kps_seq: np.ndarray, frame_index: int = 0) -> float:
     if kps_seq.shape[1] > 12:
         left_shoulder = kps_seq[frame_index, 11, :2]
@@ -65,10 +75,89 @@ def detect_slide_or_sway(
     return (None, score)
 
 
+def detect_sway(
+    kps_seq: np.ndarray,
+    address_frame: int = 0,
+    top_frame: int | None = None,
+    sway_threshold: float = 0.10,
+):
+    T = kps_seq.shape[0]
+    top = T - 1 if top_frame is None else top_frame
+    hips = compute_hip_centers(kps_seq)
+    hip_x_address = hips[address_frame, 0]
+    hip_x_top = hips[top, 0]
+    dx = hip_x_top - hip_x_address
+    norm = compute_shoulder_width(kps_seq, address_frame)
+    score = float(abs(dx) / norm)
+    if score > sway_threshold:
+        return ("sway", score)
+    return (None, score)
+
+
+def detect_early_extension(
+    kps_seq: np.ndarray,
+    top_frame: int | None = None,
+    impact_frame: int | None = None,
+    extension_threshold: float = 0.06,
+):
+    T = kps_seq.shape[0]
+    top = 0 if top_frame is None else top_frame
+    impact = T - 1 if impact_frame is None else impact_frame
+    hips = compute_hip_centers(kps_seq)
+    hip_y_top = hips[top, 1]
+    hip_y_impact = hips[impact, 1]
+    dy = hip_y_impact - hip_y_top
+    norm = compute_shoulder_width(kps_seq, top)
+    score = float(dy / norm)
+    if score > extension_threshold:
+        return ("early_extension", score)
+    return (None, score)
+
+
+def detect_over_the_top(
+    kps_seq: np.ndarray,
+    top_frame: int | None = None,
+    impact_frame: int | None = None,
+    ott_threshold: float = 0.12,
+):
+    T = kps_seq.shape[0]
+    top = 0 if top_frame is None else top_frame
+    impact = T - 1 if impact_frame is None else impact_frame
+    if impact <= top:
+        return (None, 0.0)
+
+    mid = top + max(1, int((impact - top) * 0.25))
+    shoulders = compute_shoulder_centers(kps_seq)
+    shoulder_x_top = shoulders[top, 0]
+    shoulder_x_mid = shoulders[mid, 0]
+
+    # Use both wrists; if either moves significantly outward early in downswing
+    if _has_mediapipe_format(kps_seq):
+        left_wrist = kps_seq[:, 15, 0]
+        right_wrist = kps_seq[:, 16, 0]
+    else:
+        left_wrist = kps_seq[:, 7, 0]
+        right_wrist = kps_seq[:, 8, 0]
+
+    # Relative x distance from shoulder center
+    rel_left_top = abs(left_wrist[top] - shoulder_x_top)
+    rel_left_mid = abs(left_wrist[mid] - shoulder_x_mid)
+    rel_right_top = abs(right_wrist[top] - shoulder_x_top)
+    rel_right_mid = abs(right_wrist[mid] - shoulder_x_mid)
+
+    rel_delta = max(rel_left_mid - rel_left_top, rel_right_mid - rel_right_top)
+    norm = compute_shoulder_width(kps_seq, top)
+    score = float(rel_delta / norm)
+    if score > ott_threshold:
+        return ("over_the_top", score)
+    return (None, score)
+
+
 def compute_swing_metrics(
     kps_seq: np.ndarray,
     address_frame: int = 0,
     impact_frame: int | None = None,
+    top_frame: int | None = None,
 ):
     T = kps_seq.shape[0]
     impact = T - 1 if impact_frame is None else impact_frame
@@ -91,7 +180,16 @@ def compute_swing_metrics(
     cos_angle = dot_product / (norm_address * norm_impact + 1e-8)
     cos_angle = np.clip(cos_angle, -1.0, 1.0)
     angle_degrees = degrees(acos(cos_angle))
-    return {
+    metrics = {
         "swing_duration_frames": swing_duration,
         "x_factor_degrees": angle_degrees,
     }
+
+    if top_frame is not None and impact is not None:
+        backswing = max(1, int(top_frame) - int(address_frame))
+        downswing = max(1, int(impact) - int(top_frame))
+        metrics["backswing_frames"] = backswing
+        metrics["downswing_frames"] = downswing
+        metrics["swing_tempo"] = float(backswing) / float(downswing)
+
+    return metrics
