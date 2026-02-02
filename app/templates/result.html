@@ -25,24 +25,26 @@
             {% endif %}
           </div>
 
-          <div class="feedback-container">
-            <h3 class="feedback-title">Feedback</h3>
+          <div class="feedback-container main-feedback">
+            <h3 class="feedback-title"> AI Coach Feedback</h3>
             <div class="feedback-content">
               <p class="feedback-text" id="feedbackText">{{ feedback_text }}</p>
             </div>
           </div>
 
           {% if audio_feedback %}
-          <div class="feedback-container">
-            <h3 class="feedback-title">Audio Feedback</h3>
-            <audio controls style="width: 100%;">
-              <source src="{{ audio_feedback }}" type="audio/wav" />
-            </audio>
+          <div class="feedback-container audio-section">
+            <h3 class="feedback-title"> Audio Feedback</h3>
+            <div class="feedback-content audio-content">
+              <audio controls style="width: 100%; border-radius: 8px;">
+                <source src="{{ audio_feedback }}" type="audio/wav" />
+              </audio>
+            </div>
           </div>
           {% endif %}
 
-          <div class="feedback-container">
-            <h3 class="feedback-title">Detected Faults</h3>
+          <div class="feedback-container faults-section">
+            <h3 class="feedback-title"> Detected Swing Faults</h3>
             <div class="feedback-content">
               {% if faults and faults|length > 0 %}
               <div class="faults-list">
@@ -60,20 +62,26 @@
                 {% endfor %}
               </div>
               {% else %}
-              <p class="feedback-text">No major faults detected.</p>
+              <div class="no-faults-message">
+                <span class="success-icon">✅</span>
+                <p class="feedback-text">Excellent! No major faults detected in your swing.</p>
+              </div>
               {% endif %}
             </div>
           </div>
 
-          <div class="feedback-container">
-            <h3 class="feedback-title">Metrics</h3>
-            <div class="feedback-content">
+          <div class="feedback-container metrics-section">
+            <h3 class="feedback-title"> Swing Metrics</h3>
+            <div class="feedback-content metrics-content">
               {% if metrics %}
-              <ul>
+              <div class="metrics-grid">
                 {% for k, v in metrics.items() %}
-                <li>{{ k }}: {{ '%.3f'|format(v) if v is number else v }}</li>
+                <div class="metric-item">
+                  <span class="metric-label">{{ k.replace('_', ' ').title() }}</span>
+                  <span class="metric-value">{{ '%.3f'|format(v) if v is number else v }}</span>
+                </div>
                 {% endfor %}
-              </ul>
+              </div>
               {% else %}
               <p class="feedback-text">No metrics available.</p>
               {% endif %}
