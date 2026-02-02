@@ -39,6 +39,14 @@
               <p class="preview-hint" id="previewHint">No video selected.</p>
             </div>
 
+            <div class="live-box" id="liveBox" hidden>
+              <h3 class="preview-title">Live camera</h3>
+              <div class="live-video-wrap">
+                <video id="liveVideo" class="live-video" playsinline muted></video>
+              </div>
+              <p class="preview-hint" id="liveStatus">Waiting for camera permission...</p>
+            </div>
+
             <video id="videoPreview" class="preview-video" playsinline muted></video>
 
             <input type="file" id="videoInput" name="video" accept="video/*" style="display: none;" required />
@@ -82,6 +90,7 @@
       </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="/static/js/index.js"></script>
   </body>
 </html>

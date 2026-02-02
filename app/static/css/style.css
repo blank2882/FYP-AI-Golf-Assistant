@@ -178,6 +178,26 @@ body {
   display: none;
 }
 
+.live-box {
+  margin-bottom: 20px;
+}
+
+.live-video-wrap {
+  width: 100%;
+  background-color: #111;
+  border: 1px solid #cfcfcf;
+  border-radius: 10px;
+  padding: 6px;
+}
+
+.live-video {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px;
+  background-color: #000;
+}
+
 .btn {
   width: 100%;
   padding: 12px 24px;
