@@ -25,13 +25,6 @@
             {% endif %}
           </div>
 
-          <div class="feedback-container main-feedback">
-            <h3 class="feedback-title"> AI Coach Feedback</h3>
-            <div class="feedback-content">
-              <p class="feedback-text" id="feedbackText">{{ feedback_text }}</p>
-            </div>
-          </div>
-
           {% if audio_feedback %}
           <div class="feedback-container audio-section">
             <h3 class="feedback-title"> Audio Feedback</h3>
@@ -42,6 +35,13 @@
             </div>
           </div>
           {% endif %}
+
+          <div class="feedback-container main-feedback">
+            <h3 class="feedback-title"> AI Coach Feedback</h3>
+            <div class="feedback-content">
+              <p class="feedback-text" id="feedbackText">{{ feedback_text }}</p>
+            </div>
+          </div>
 
           <div class="feedback-container faults-section">
             <h3 class="feedback-title"> Detected Swing Faults</h3>
