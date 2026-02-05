@@ -6,33 +6,43 @@ This repository contains a full golf-swing analysis pipeline (object + pose dete
 
 For the virtual environment, it is imperative to use python version 3.10.19 as some of the dependencies are not suitable for newer versions. 
 
-### 1) Create and Activate the virtual environment
+### 1) Activate the virtual environment
 
 Use the existing environment name:
 
 - Windows (PowerShell):
   - `conda activate golfAssist`
 
-### 2)  Install Pytorch, ensure that it is the CPU ONLY version!
-
-  - `pip install torch torchvision`
-
-### 3) Install dependencies
+### 2) Install dependencies
 
 - `pip install -r requirements.txt`
 
-### 4) (Optional) Install and run Ollama
+### 3) (Optional) Install and run Ollama
 
 If you want LLM feedback:
 
 - Install Ollama: https://ollama.com/
 - Pull a model: `ollama pull qwen2.5`
 
-### 5) Run the web app
+### 4) Run the web app
 
 - `uvicorn app.main:app --reload`
 
 Open http://127.0.0.1:8000 in your browser, upload a golf swing video, and wait for the annotated video + feedback.
+
+## Docker (Python 3.10.19)
+
+This uses a Python 3.10.19 base image and exposes the app on port 8000.
+
+### Build and run
+
+- `docker compose up --build`
+
+Then open http://<YOUR_PC_IP>:8000 on your mobile phone (same Wi‑Fi).
+
+### Stop
+
+- `docker compose down`
 
 ## Project structure
 

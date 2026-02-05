@@ -1,5 +1,5 @@
 # for object detection and pose estimation
-mediapipe
+mediapipe==0.10.9
 
 # for golfdb
 opencv-python

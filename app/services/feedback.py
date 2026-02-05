@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import requests
 import shutil
 import subprocess
@@ -98,9 +99,10 @@ def generate_feedback_ollama_cli(events, kps, faults, model: str = "qwen2.5"):
 
 
 def generate_feedback(events, kps, faults, prefer_http: bool = True, model: str = "qwen2.5"):
-    if prefer_http and ollama_http_available():
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    if prefer_http and ollama_http_available(base_url):
         try:
-            return generate_feedback_ollama_http(events, kps, faults, model=model)
+            return generate_feedback_ollama_http(events, kps, faults, url=base_url, model=model)
         except Exception:
             pass
     return generate_feedback_ollama_cli(events, kps, faults, model=model)
