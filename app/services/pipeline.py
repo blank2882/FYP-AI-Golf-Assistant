@@ -24,6 +24,18 @@ from app.services.biomech import (
     _score_to_confidence,
 )
 from app.services.tts_service import generate_audio_feedback
+from app.services.validation import (
+    POSE_MIN_RATIO,
+    SWINGNET_MIN_CONF,
+    MOTION_MIN_SCORE,
+    LIKELIHOOD_MIN_SCORE,
+    validate_file_level,
+    compute_pose_presence_ratio,
+    build_keypoint_array,
+    compute_motion_pattern_score,
+    compute_swingnet_confidence,
+    compute_likelihood_score,
+)
 
 
 class GolfAssistant:
@@ -66,6 +78,51 @@ class GolfAssistant:
         self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
         self.timing: Dict[str, float] = {}
+
+    def _validation_payload(
+        self,
+        valid: bool,
+        message: str,
+        score: float = 0.0,
+        signals: Dict[str, float] | None = None,
+        details: Dict[str, object] | None = None,
+    ) -> Dict[str, object]:
+        return {
+            "valid": valid,
+            "message": message,
+            "score": float(score),
+            "signals": signals or {},
+            "details": details or {},
+        }
+
+    def _validation_failure(
+        self,
+        message: str,
+        score: float = 0.0,
+        signals: Dict[str, float] | None = None,
+        details: Dict[str, object] | None = None,
+    ) -> Dict[str, object]:
+        payload = self._validation_payload(False, message, score, signals, details)
+        metrics = {}
+        if signals:
+            metrics = {
+                "golf_swing_likelihood": float(score),
+                "pose_presence": float(signals.get("pose_presence", 0.0)),
+                "motion_pattern": float(signals.get("motion_pattern", 0.0)),
+                "swingnet_confidence": float(signals.get("swingnet_confidence", 0.0)),
+            }
+
+        return {
+            "validation": payload,
+            "feedback": message,
+            "metrics": metrics,
+            "event_frames": [],
+            "confidences": [],
+            "annotated_video": None,
+            "json": None,
+            "faults": [],
+            "audio_feedback": None,
+        }
 
     def print_timing_summary(self):
         lines = []
@@ -222,25 +279,51 @@ class GolfAssistant:
     def run(self):
         pipeline_start = time.time()
 
+        file_ok, file_message, file_info = validate_file_level(self.video_path)
+        if not file_ok:
+            return self._validation_failure(
+                file_message,
+                details={"file": file_info},
+            )
+
         stage_start = time.time()
         metadata = self.run_detector()
         self.timing["1. Object & Pose Detection"] = time.time() - stage_start
 
         if not metadata:
-            return {}
+            return self._validation_failure(
+                "Unable to detect a person in the video. Please re-record your swing.",
+                details={"file": file_info},
+            )
+
+        pose_ratio = compute_pose_presence_ratio(metadata)
+        if pose_ratio < POSE_MIN_RATIO:
+            return self._validation_failure(
+                "Unable to detect a consistent human pose. Please re-record your swing.",
+                signals={"pose_presence": float(pose_ratio)},
+                details={"pose_presence": float(pose_ratio), "file": file_info},
+            )
 
         stage_start = time.time()
         collected_rgb, collected_frame_idxs, collected_keypoints = self.build_crops_from_metadata(metadata)
         self.timing["2. Crop Extraction"] = time.time() - stage_start
 
         if len(collected_rgb) == 0:
-            return {}
+            return self._validation_failure(
+                "Unable to extract valid pose data. Please re-record your swing.",
+                signals={"pose_presence": float(pose_ratio)},
+                details={"pose_presence": float(pose_ratio), "file": file_info},
+            )
 
         stage_start = time.time()
         try:
             inferer = SwingNetInferer(self.weights_path)
         except Exception:
-            return {}
+            return self._validation_failure(
+                "SwingNet is unavailable. Please try again later.",
+                signals={"pose_presence": float(pose_ratio)},
+                details={"pose_presence": float(pose_ratio), "file": file_info},
+            )
         self.timing["3. SwingNet Model Loading"] = time.time() - stage_start
 
         stage_start = time.time()
@@ -268,6 +351,54 @@ class GolfAssistant:
             label_map[frame_for_class] = (EVENT_LIST[c], conf)
         self.timing["5. Label Processing"] = time.time() - stage_start
 
+        kps = build_keypoint_array(collected_keypoints)
+        motion_score, motion_details = compute_motion_pattern_score(
+            kps,
+            collected_frame_idxs,
+            float(file_info.get("fps", 0.0)),
+        )
+        if motion_score < MOTION_MIN_SCORE:
+            return self._validation_failure(
+                "Unable to detect a golf swing motion pattern. Please re-record your swing.",
+                signals={"pose_presence": float(pose_ratio), "motion_pattern": float(motion_score)},
+                details={"pose_presence": float(pose_ratio), "motion": motion_details, "file": file_info},
+            )
+
+        swingnet_confidence = compute_swingnet_confidence(confidences)
+        if swingnet_confidence < SWINGNET_MIN_CONF:
+            return self._validation_failure(
+                "Unable to detect a valid golf swing. Please re-record your swing.",
+                signals={
+                    "pose_presence": float(pose_ratio),
+                    "motion_pattern": float(motion_score),
+                    "swingnet_confidence": float(swingnet_confidence),
+                },
+                details={
+                    "pose_presence": float(pose_ratio),
+                    "motion": motion_details,
+                    "swingnet_confidence": float(swingnet_confidence),
+                    "file": file_info,
+                },
+            )
+
+        likelihood_score = compute_likelihood_score(pose_ratio, motion_score, swingnet_confidence)
+        if likelihood_score < LIKELIHOOD_MIN_SCORE:
+            return self._validation_failure(
+                "Golf swing likelihood is too low. Please re-record your swing.",
+                score=float(likelihood_score),
+                signals={
+                    "pose_presence": float(pose_ratio),
+                    "motion_pattern": float(motion_score),
+                    "swingnet_confidence": float(swingnet_confidence),
+                },
+                details={
+                    "pose_presence": float(pose_ratio),
+                    "motion": motion_details,
+                    "swingnet_confidence": float(swingnet_confidence),
+                    "file": file_info,
+                },
+            )
+
         stage_start = time.time()
         summary = {"predicted_events": []}
         for i, ef in enumerate(event_frames):
@@ -288,22 +419,6 @@ class GolfAssistant:
         self.timing["7. Video Annotation"] = time.time() - stage_start
 
         stage_start = time.time()
-        import numpy as _np
-
-        if len(collected_keypoints) > 0:
-            L = len(collected_keypoints[0])
-            kps = _np.zeros((len(collected_keypoints), L, 3), dtype=_np.float32)
-            for t, pose in enumerate(collected_keypoints):
-                for i, lm in enumerate(pose):
-                    x = float(lm.get("x", 0.0))
-                    y = float(lm.get("y", 0.0))
-                    vis = float(lm.get("visibility", 1.0))
-                    kps[t, i, 0] = x
-                    kps[t, i, 1] = y
-                    kps[t, i, 2] = vis
-        else:
-            kps = _np.zeros((0, 0, 3), dtype=_np.float32)
-
         events_map = {EVENT_LIST[i]: int(ef) for i, ef in enumerate(event_frames)}
 
         faults = []
@@ -356,6 +471,10 @@ class GolfAssistant:
             top_frame=events_map.get("Top"),
             impact_frame=events_map.get("Impact"),
         )
+        swing_metrics["golf_swing_likelihood"] = float(likelihood_score)
+        swing_metrics["pose_presence"] = float(pose_ratio)
+        swing_metrics["motion_pattern"] = float(motion_score)
+        swing_metrics["swingnet_confidence"] = float(swingnet_confidence)
         swing_metrics["camera_angle"] = classify_camera_angle(
             kps,
             address_frame=events_map.get("Address", 0),
@@ -390,6 +509,22 @@ class GolfAssistant:
             "json": self.pred_json,
             "faults": faults,
             "metrics": swing_metrics,
+            "validation": self._validation_payload(
+                True,
+                "OK",
+                score=float(likelihood_score),
+                signals={
+                    "pose_presence": float(pose_ratio),
+                    "motion_pattern": float(motion_score),
+                    "swingnet_confidence": float(swingnet_confidence),
+                },
+                details={
+                    "pose_presence": float(pose_ratio),
+                    "motion": motion_details,
+                    "swingnet_confidence": float(swingnet_confidence),
+                    "file": file_info,
+                },
+            ),
             "feedback": coaching,
             "audio_feedback": audio_path,
             "timings": self.timing,

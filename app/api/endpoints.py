@@ -30,6 +30,25 @@ def analyze(request: Request, video: UploadFile = File(...)):
     assistant = GolfAssistant(video_path=str(video_path), out_dir=str(run_dir))
     result = assistant.run()
 
+    validation = result.get("validation") or {}
+    is_valid = bool(validation.get("valid", True))
+    if not is_valid:
+        message = validation.get("message") or "Unable to detect a valid golf swing."
+        return templates.TemplateResponse(
+            "result.html",
+            {
+                "request": request,
+                "annotated_video": None,
+                "feedback_text": message,
+                "faults": [],
+                "metrics": result.get("metrics") or {},
+                "audio_feedback": None,
+                "event_frames": [],
+                "confidences": [],
+                "validation": validation,
+            },
+        )
+
     faults = result.get("faults", [])
     fault_items = [{"name": f[0], "score": float(f[1]), "confidence": float(f[2])} for f in faults]
 
@@ -52,6 +71,7 @@ def analyze(request: Request, video: UploadFile = File(...)):
             "audio_feedback": audio_feedback,
             "event_frames": result.get("event_frames") or [],
             "confidences": result.get("confidences") or [],
+            "validation": validation,
         },
     )
 
@@ -64,6 +84,9 @@ def analyze_api(video: UploadFile = File(...)):
 
     assistant = GolfAssistant(video_path=str(video_path), out_dir=str(run_dir))
     result = assistant.run()
+
+    validation = result.get("validation") or {}
+    is_valid = bool(validation.get("valid", True))
 
     faults = result.get("faults", [])
     fault_items = [FaultItem(name=f[0], score=float(f[1]), confidence=float(f[2])) for f in faults]
@@ -78,6 +101,10 @@ def analyze_api(video: UploadFile = File(...)):
         confidences=[float(c) for c in result.get("confidences") or []],
         faults=fault_items,
         metrics=result.get("metrics") or {},
+        valid=is_valid,
+        validation_message=validation.get("message"),
+        validation_score=validation.get("score"),
+        validation_signals=validation.get("signals") or {},
     )
     return response
 

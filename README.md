@@ -8,10 +8,8 @@ For the virtual environment, it is imperative to use python version 3.10.19 as s
 
 ### 1) Activate the virtual environment
 
-Use the existing environment name:
+Create and activate a virtual environment
 
-- Windows (PowerShell):
-  - `conda activate golfAssist`
 
 ### 2) Install dependencies
 

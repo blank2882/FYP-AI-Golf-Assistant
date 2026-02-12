@@ -25,6 +25,61 @@
             {% endif %}
           </div>
 
+          {% set validation_score = validation.score if validation and validation.score is not none else metrics.get('golf_swing_likelihood') %}
+          {% set validation_signals = validation.signals if validation and validation.signals else {} %}
+          {% set pose_signal = validation_signals.get('pose_presence') if validation_signals else metrics.get('pose_presence') %}
+          {% set motion_signal = validation_signals.get('motion_pattern') if validation_signals else metrics.get('motion_pattern') %}
+          {% set swingnet_signal = validation_signals.get('swingnet_confidence') if validation_signals else metrics.get('swingnet_confidence') %}
+
+          <div class="feedback-container validation-section">
+            <h3 class="feedback-title"> Swing Validation</h3>
+            <div class="feedback-content validation-content">
+              <div class="validation-summary">
+                <div class="validation-score">
+                  <span class="validation-score-label">Golf Swing Likelihood</span>
+                  <span class="validation-score-value">
+                    {% if validation_score is not none %}
+                      {{ '%.0f'|format(validation_score * 100) }}%
+                    {% else %}
+                      N/A
+                    {% endif %}
+                  </span>
+                </div>
+                <div class="validation-status">
+                  {% if validation and not validation.valid %}
+                    Validation failed. Please re-record your swing.
+                  {% else %}
+                    Validation passed. Analysis is based on this swing.
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="validation-bars">
+                <div class="signal-row">
+                  <span class="signal-label">Pose Presence</span>
+                  <div class="signal-bar">
+                    <div class="signal-fill" style="width: {{ (pose_signal or 0) * 100 }}%"></div>
+                  </div>
+                  <span class="signal-value">{{ '%.0f'|format((pose_signal or 0) * 100) }}%</span>
+                </div>
+                <div class="signal-row">
+                  <span class="signal-label">Motion Pattern</span>
+                  <div class="signal-bar">
+                    <div class="signal-fill" style="width: {{ (motion_signal or 0) * 100 }}%"></div>
+                  </div>
+                  <span class="signal-value">{{ '%.0f'|format((motion_signal or 0) * 100) }}%</span>
+                </div>
+                <div class="signal-row">
+                  <span class="signal-label">SwingNet Confidence</span>
+                  <div class="signal-bar">
+                    <div class="signal-fill" style="width: {{ (swingnet_signal or 0) * 100 }}%"></div>
+                  </div>
+                  <span class="signal-value">{{ '%.0f'|format((swingnet_signal or 0) * 100) }}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {% if audio_feedback %}
           <div class="feedback-container audio-section">
             <h3 class="feedback-title"> Audio Feedback</h3>
@@ -46,7 +101,14 @@
           <div class="feedback-container faults-section">
             <h3 class="feedback-title"> Detected Swing Faults</h3>
             <div class="feedback-content">
-              {% if faults and faults|length > 0 %}
+              {% if validation and not validation.valid %}
+              <div class="no-faults-message">
+                <span class="warning-icon">⚠️</span>
+                <p class="feedback-text">
+                  Swing validation failed. No fault analysis was performed.
+                </p>
+              </div>
+              {% elif faults and faults|length > 0 %}
               <div class="faults-list">
                 {% for f in faults %}
                 <div class="fault-item">

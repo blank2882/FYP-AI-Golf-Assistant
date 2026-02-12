@@ -21,3 +21,7 @@ class AnalysisResponse(BaseModel):
     confidences: List[float]
     faults: List[FaultItem]
     metrics: dict
+    valid: bool = True
+    validation_message: Optional[str] = None
+    validation_score: Optional[float] = None
+    validation_signals: Optional[dict] = None
