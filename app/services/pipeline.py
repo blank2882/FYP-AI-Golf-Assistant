@@ -156,7 +156,7 @@ class GolfAssistant:
         processed_count, metadata = self.detector.process_video(
             self.video_path,
             display=display,
-            output_path=None,
+            output_path=self.annotated_base,
             collect_metadata=True,
             metadata_output_path=os.path.join(self.out_dir, "metadata.json"),
             every_n=every_n,
@@ -490,8 +490,12 @@ class GolfAssistant:
         self.timing["6. JSON Export"] = time.time() - stage_start
 
         stage_start = time.time()
+        self.annotate_video_with_labels(self.annotated_base, self.annotated_out, label_map)
+        self.timing["7. Video Annotation"] = time.time() - stage_start
+
+        stage_start = time.time()
         event_frame_images = self.export_event_frames(event_frames, EVENT_LIST, confidences)
-        self.timing["7. Frame Export"] = time.time() - stage_start
+        self.timing["7b. Frame Export"] = time.time() - stage_start
 
         stage_start = time.time()
         events_map = {EVENT_LIST[i]: int(ef) for i, ef in enumerate(event_frames)}
@@ -581,7 +585,7 @@ class GolfAssistant:
             "event_frames": event_frames,
             "confidences": confidences,
             "event_frame_images": event_frame_images,
-            "annotated_video": None,
+            "annotated_video": self.annotated_out,
             "json": self.pred_json,
             "faults": faults,
             "metrics": swing_metrics,

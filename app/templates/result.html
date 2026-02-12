@@ -15,25 +15,15 @@
           <h1 class="title">Your Swing Analysis</h1>
           <p class="subtitle">AI Golf coach</p>
 
-          {% if event_frame_images and event_frame_images|length > 0 %}
-          <div class="feedback-container frames-section">
-            <h3 class="feedback-title"> Swing Phases</h3>
-            <div class="feedback-content frames-content">
-              <div class="frames-grid">
-                {% for item in event_frame_images %}
-                <div class="frame-card">
-                  <div class="frame-meta">
-                    <span class="frame-label">{{ item.event_name }}</span>
-                    <span class="frame-conf">{{ '%.0f'|format((item.confidence or 0) * 100) }}%</span>
-                  </div>
-                  <img class="frame-image" src="{{ item.image_url }}" alt="{{ item.event_name }} frame" />
-                  <div class="frame-index">Frame {{ item.frame_index }}</div>
-                </div>
-                {% endfor %}
-              </div>
-            </div>
+          <div class="video-container" id="videoDisplay">
+            {% if annotated_video %}
+            <video id="uploadedVideo" controls style="width: 100%; max-height: 300px; border-radius: 8px;">
+              <source src="{{ annotated_video }}" type="video/mp4" />
+            </video>
+            {% else %}
+            <p class="video-placeholder-text" id="videoPlaceholder">Annotated video unavailable</p>
+            {% endif %}
           </div>
-          {% endif %}
 
           {% set validation_score = validation.score if validation and validation.score is not none else metrics.get('golf_swing_likelihood') %}
           {% set validation_signals = validation.signals if validation and validation.signals else {} %}
@@ -89,6 +79,26 @@
               </div>
             </div>
           </div>
+
+          {% if event_frame_images and event_frame_images|length > 0 %}
+          <div class="feedback-container frames-section">
+            <h3 class="feedback-title"> Swing Phases</h3>
+            <div class="feedback-content frames-content">
+              <div class="frames-grid">
+                {% for item in event_frame_images %}
+                <div class="frame-card">
+                  <div class="frame-meta">
+                    <span class="frame-label">{{ item.event_name }}</span>
+                    <span class="frame-conf">{{ '%.0f'|format((item.confidence or 0) * 100) }}%</span>
+                  </div>
+                  <img class="frame-image" src="{{ item.image_url }}" alt="{{ item.event_name }} frame" />
+                  <div class="frame-index">Frame {{ item.frame_index }}</div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
 
           {% if audio_feedback %}
           <div class="feedback-container audio-section">
