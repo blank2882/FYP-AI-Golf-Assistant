@@ -10,7 +10,10 @@ import subprocess
 
 def ollama_http_available(url: str = "http://localhost:11434") -> bool:
     try:
-        r = requests.get(url + "/ping", timeout=1.0)
+        r = requests.get(url + "/api/version", timeout=1.0)
+        if r.status_code == 200:
+            return True
+        r = requests.get(url + "/api/tags", timeout=1.0)
         return r.status_code == 200
     except Exception:
         return False
@@ -70,7 +73,13 @@ Be concise, evidence-grounded, and avoid fabricating data.
 
 def generate_feedback_ollama_http(events, kps, faults, url: str = "http://localhost:11434", model: str = "qwen2.5"):
     prompt = build_prompt(events, kps, faults)
-    payload = {"model": model, "prompt": prompt, "temperature": 0.0, "max_tokens": 400}
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "temperature": 0.0,
+        "max_tokens": 400,
+        "stream": False,
+    }
     resp = requests.post(url + "/api/generate", json=payload, timeout=30)
     resp.raise_for_status()
     data = resp.json()
