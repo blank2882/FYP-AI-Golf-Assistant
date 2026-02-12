@@ -15,16 +15,6 @@
           <h1 class="title">Your Swing Analysis</h1>
           <p class="subtitle">AI Golf coach</p>
 
-          <div class="video-container" id="videoDisplay">
-            {% if annotated_video %}
-            <video id="uploadedVideo" controls style="width: 100%; max-height: 300px; border-radius: 8px;">
-              <source src="{{ annotated_video }}" type="video/mp4" />
-            </video>
-            {% else %}
-            <p class="video-placeholder-text" id="videoPlaceholder">Annotated video unavailable</p>
-            {% endif %}
-          </div>
-
           {% if event_frame_images and event_frame_images|length > 0 %}
           <div class="feedback-container frames-section">
             <h3 class="feedback-title"> Swing Phases</h3>

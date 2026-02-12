@@ -156,7 +156,7 @@ class GolfAssistant:
         processed_count, metadata = self.detector.process_video(
             self.video_path,
             display=display,
-            output_path=self.annotated_base,
+            output_path=None,
             collect_metadata=True,
             metadata_output_path=os.path.join(self.out_dir, "metadata.json"),
             every_n=every_n,
@@ -201,37 +201,49 @@ class GolfAssistant:
         collected_frame_idxs = []
         collected_keypoints = []
 
-        # Seek directly to frames with metadata instead of decoding the full video
-        for item in metadata:
-            frame_idx = item["frame_index"]
-            md = item["metadata"]
+        ordered_metadata = sorted(metadata, key=lambda item: int(item.get("frame_index", 0)))
+        md_iter = iter(ordered_metadata)
+        current_item = next(md_iter, None)
+        if current_item is None:
+            cap.release()
+            return [], [], []
 
-            used_bbox = None
-            best_score = 0.0
-            for obj in md.get("objects", []):
-                score = obj.get("score", 0.0) or 0.0
-                if score > best_score:
-                    best_score = score
-                    used_bbox = obj.get("bbox")
-
-            if used_bbox is None:
-                continue
-
-            poses = md.get("pose", []) or []
-            if len(poses) > 0:
-                primary_pose = poses[0]
-            else:
-                primary_pose = [{"x": 0.0, "y": 0.0, "z": 0.0} for _ in range(33)]
-
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+        target_idx = int(current_item.get("frame_index", 0))
+        frame_idx = 0
+        while True:
             ret, frame = cap.read()
             if not ret:
-                continue
+                break
 
-            rgb = self.crop_and_resize(frame, used_bbox)
-            collected_rgb.append(rgb)
-            collected_frame_idxs.append(frame_idx)
-            collected_keypoints.append(primary_pose)
+            if frame_idx == target_idx:
+                md = current_item.get("metadata", {})
+
+                used_bbox = None
+                best_score = 0.0
+                for obj in md.get("objects", []):
+                    score = obj.get("score", 0.0) or 0.0
+                    if score > best_score:
+                        best_score = score
+                        used_bbox = obj.get("bbox")
+
+                if used_bbox is not None:
+                    poses = md.get("pose", []) or []
+                    if len(poses) > 0:
+                        primary_pose = poses[0]
+                    else:
+                        primary_pose = [{"x": 0.0, "y": 0.0, "z": 0.0} for _ in range(33)]
+
+                    rgb = self.crop_and_resize(frame, used_bbox)
+                    collected_rgb.append(rgb)
+                    collected_frame_idxs.append(frame_idx)
+                    collected_keypoints.append(primary_pose)
+
+                current_item = next(md_iter, None)
+                if current_item is None:
+                    break
+                target_idx = int(current_item.get("frame_index", 0))
+
+            frame_idx += 1
 
         cap.release()
         return collected_rgb, collected_frame_idxs, collected_keypoints
@@ -319,6 +331,10 @@ class GolfAssistant:
             if width > max_width:
                 scale = max_width / float(width)
                 frame = cv2.resize(frame, (max_width, int(height * scale)))
+
+            label_text = f"{label} ({confidence:.2f})"
+            cv2.putText(frame, label_text, (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 3, cv2.LINE_AA)
+            cv2.putText(frame, label_text, (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
 
             filename = f"event_{i:02d}_{self._slug_event_label(label)}.jpg"
             out_path = os.path.join(out_dir, filename)
@@ -474,12 +490,8 @@ class GolfAssistant:
         self.timing["6. JSON Export"] = time.time() - stage_start
 
         stage_start = time.time()
-        self.annotate_video_with_labels(self.annotated_base, self.annotated_out, label_map)
-        self.timing["7. Video Annotation"] = time.time() - stage_start
-
-        stage_start = time.time()
         event_frame_images = self.export_event_frames(event_frames, EVENT_LIST, confidences)
-        self.timing["7b. Frame Export"] = time.time() - stage_start
+        self.timing["7. Frame Export"] = time.time() - stage_start
 
         stage_start = time.time()
         events_map = {EVENT_LIST[i]: int(ef) for i, ef in enumerate(event_frames)}
@@ -569,7 +581,7 @@ class GolfAssistant:
             "event_frames": event_frames,
             "confidences": confidences,
             "event_frame_images": event_frame_images,
-            "annotated_video": self.annotated_out,
+            "annotated_video": None,
             "json": self.pred_json,
             "faults": faults,
             "metrics": swing_metrics,
