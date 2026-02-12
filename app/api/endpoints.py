@@ -44,6 +44,7 @@ def analyze(request: Request, video: UploadFile = File(...)):
                 "metrics": result.get("metrics") or {},
                 "audio_feedback": None,
                 "event_frames": [],
+                "event_frame_images": [],
                 "confidences": [],
                 "validation": validation,
             },
@@ -60,6 +61,20 @@ def analyze(request: Request, video: UploadFile = File(...)):
     if result.get("audio_feedback"):
         audio_feedback = _to_static_url(result["audio_feedback"])
 
+    event_frame_images = []
+    for item in result.get("event_frame_images") or []:
+        image_url = _to_static_url(item.get("image_path"))
+        if not image_url:
+            continue
+        event_frame_images.append(
+            {
+                "event_name": item.get("event_name"),
+                "frame_index": item.get("frame_index"),
+                "confidence": item.get("confidence"),
+                "image_url": image_url,
+            }
+        )
+
     return templates.TemplateResponse(
         "result.html",
         {
@@ -70,6 +85,7 @@ def analyze(request: Request, video: UploadFile = File(...)):
             "metrics": result.get("metrics") or {},
             "audio_feedback": audio_feedback,
             "event_frames": result.get("event_frames") or [],
+            "event_frame_images": event_frame_images,
             "confidences": result.get("confidences") or [],
             "validation": validation,
         },

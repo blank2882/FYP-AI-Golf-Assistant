@@ -6,7 +6,7 @@
     <title>AI Golf Assistant - Analysis</title>
     <meta name="description" content="" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="/static/css/results.css" />
+    <link rel="stylesheet" href="/static/css/results.css?v=20260212" />
   </head>
   <body>
     <div class="page-container analysis-page-container">
@@ -24,6 +24,26 @@
             <p class="video-placeholder-text" id="videoPlaceholder">Annotated video unavailable</p>
             {% endif %}
           </div>
+
+          {% if event_frame_images and event_frame_images|length > 0 %}
+          <div class="feedback-container frames-section">
+            <h3 class="feedback-title"> Swing Phases</h3>
+            <div class="feedback-content frames-content">
+              <div class="frames-grid">
+                {% for item in event_frame_images %}
+                <div class="frame-card">
+                  <div class="frame-meta">
+                    <span class="frame-label">{{ item.event_name }}</span>
+                    <span class="frame-conf">{{ '%.0f'|format((item.confidence or 0) * 100) }}%</span>
+                  </div>
+                  <img class="frame-image" src="{{ item.image_url }}" alt="{{ item.event_name }} frame" />
+                  <div class="frame-index">Frame {{ item.frame_index }}</div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
 
           {% set validation_score = validation.score if validation and validation.score is not none else metrics.get('golf_swing_likelihood') %}
           {% set validation_signals = validation.signals if validation and validation.signals else {} %}
@@ -134,11 +154,41 @@
             <h3 class="feedback-title"> Swing Metrics</h3>
             <div class="feedback-content metrics-content">
               {% if metrics %}
+              {% set metric_help = {
+                "golf_swing_likelihood": "Overall likelihood the upload is a valid golf swing.",
+                "pose_presence": "Share of frames where a full body pose is detected.",
+                "motion_pattern": "How swing-like the motion profile is across the clip.",
+                "swingnet_confidence": "Average SwingNet confidence across detected phases.",
+                "camera_angle": "Estimated camera view (down-the-line or face-on).",
+                "swing_duration_frames": "Total frames from address to impact.",
+                "x_factor_degrees": "Shoulder rotation difference from address to impact.",
+                "backswing_frames": "Frames from address to top of backswing.",
+                "downswing_frames": "Frames from top of backswing to impact.",
+                "swing_tempo": "Backswing frames divided by downswing frames."
+              } %}
+              {% set hidden_metrics = ["golf_swing_likelihood", "pose_presence", "motion_pattern", "swingnet_confidence"] %}
+              {% set integer_metrics = ["swing_duration_frames", "backswing_frames", "downswing_frames"] %}
               <div class="metrics-grid">
-                {% for k, v in metrics.items() %}
+                {% for k, v in metrics.items() if k not in hidden_metrics %}
                 <div class="metric-item">
-                  <span class="metric-label">{{ k.replace('_', ' ').title() }}</span>
-                  <span class="metric-value">{{ '%.3f'|format(v) if v is number else v }}</span>
+                  <div class="metric-header">
+                    <span class="metric-label">{{ k.replace('_', ' ').title() }}</span>
+                    {% if metric_help.get(k) %}
+                    <button class="metric-info" type="button" aria-label="{{ k.replace('_', ' ').title() }} info">
+                      i
+                      <span class="metric-tooltip" role="tooltip">{{ metric_help.get(k) }}</span>
+                    </button>
+                    {% endif %}
+                  </div>
+                  <span class="metric-value">
+                    {% if v is number and k in integer_metrics %}
+                      {{ v|int }}
+                    {% elif v is number %}
+                      {{ '%.3f'|format(v) }}
+                    {% else %}
+                      {{ v }}
+                    {% endif %}
+                  </span>
                 </div>
                 {% endfor %}
               </div>

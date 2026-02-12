@@ -276,6 +276,65 @@ class GolfAssistant:
         cap.release()
         writer.release()
 
+    def _slug_event_label(self, label: str) -> str:
+        cleaned = label.lower().strip().replace(" ", "-").replace("/", "-")
+        safe_chars = []
+        for ch in cleaned:
+            if ch.isalnum() or ch in ("-", "_"):
+                safe_chars.append(ch)
+            else:
+                safe_chars.append("-")
+        slug = "".join(safe_chars).strip("-")
+        while "--" in slug:
+            slug = slug.replace("--", "-")
+        return slug or "event"
+
+    def export_event_frames(
+        self,
+        frame_indices: list[int],
+        labels: list[str],
+        confidences: list[float],
+        max_width: int = 360,
+    ) -> list[dict]:
+        if not frame_indices:
+            return []
+
+        out_dir = os.path.join(self.out_dir, "swingnet_frames")
+        os.makedirs(out_dir, exist_ok=True)
+
+        cap = cv2.VideoCapture(self.video_path)
+        if not cap.isOpened():
+            return []
+
+        exported = []
+        for i, frame_idx in enumerate(frame_indices):
+            label = labels[i] if i < len(labels) else f"Event-{i + 1}"
+            confidence = float(confidences[i]) if i < len(confidences) else 0.0
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_idx))
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                continue
+
+            height, width = frame.shape[:2]
+            if width > max_width:
+                scale = max_width / float(width)
+                frame = cv2.resize(frame, (max_width, int(height * scale)))
+
+            filename = f"event_{i:02d}_{self._slug_event_label(label)}.jpg"
+            out_path = os.path.join(out_dir, filename)
+            cv2.imwrite(out_path, frame)
+            exported.append(
+                {
+                    "event_name": label,
+                    "frame_index": int(frame_idx),
+                    "confidence": confidence,
+                    "image_path": out_path,
+                }
+            )
+
+        cap.release()
+        return exported
+
     def run(self):
         pipeline_start = time.time()
 
@@ -419,6 +478,10 @@ class GolfAssistant:
         self.timing["7. Video Annotation"] = time.time() - stage_start
 
         stage_start = time.time()
+        event_frame_images = self.export_event_frames(event_frames, EVENT_LIST, confidences)
+        self.timing["7b. Frame Export"] = time.time() - stage_start
+
+        stage_start = time.time()
         events_map = {EVENT_LIST[i]: int(ef) for i, ef in enumerate(event_frames)}
 
         faults = []
@@ -505,6 +568,7 @@ class GolfAssistant:
         return {
             "event_frames": event_frames,
             "confidences": confidences,
+            "event_frame_images": event_frame_images,
             "annotated_video": self.annotated_out,
             "json": self.pred_json,
             "faults": faults,
