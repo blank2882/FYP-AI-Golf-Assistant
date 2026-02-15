@@ -6,6 +6,7 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./outputs:/app/outputs
+      - tts-cache:/root/.local/share/tts
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
     depends_on:
@@ -22,3 +23,4 @@ services:
 
 volumes:
   ollama:
+  tts-cache:

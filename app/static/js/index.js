@@ -2,6 +2,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const videoInput = document.getElementById('videoInput');
   const chooseFileBtn = document.getElementById('chooseFileBtn');
   const recordBtn = document.getElementById('recordBtn');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const uploadForm = document.getElementById('uploadForm');
   const previewCanvas = document.getElementById('videoPreviewCanvas');
   const previewCtx = previewCanvas ? previewCanvas.getContext('2d') : null;
   const previewVideo = document.getElementById('videoPreview');
@@ -9,6 +11,14 @@ document.addEventListener('DOMContentLoaded', function() {
   const liveBox = document.getElementById('liveBox');
   const liveVideo = document.getElementById('liveVideo');
   const liveStatus = document.getElementById('liveStatus');
+  const liveOverlay = document.getElementById('liveOverlay');
+  const overlayCtx = liveOverlay ? liveOverlay.getContext('2d') : null;
+  const fullBodyStatus = document.getElementById('fullBodyStatus');
+  const swingDuration = document.getElementById('swingDuration');
+  const recordedActions = document.getElementById('recordedActions');
+  const useSwingBtn = document.getElementById('useSwingBtn');
+  const retakeBtn = document.getElementById('retakeBtn');
+  const loadingOverlay = document.getElementById('loadingOverlay');
 
   let animationFrameId = null;
   let liveStream = null;
@@ -21,6 +31,8 @@ document.addEventListener('DOMContentLoaded', function() {
   let stopTimeoutId = null;
   let pose = null;
   let processingFrame = false;
+  let fullBodyDetected = false;
+  let recordStartTime = null;
 
   function drawPlaceholder(text) {
     if (!previewCtx || !previewCanvas) return;
@@ -33,6 +45,78 @@ document.addEventListener('DOMContentLoaded', function() {
     previewCtx.textAlign = 'center';
     previewCtx.textBaseline = 'middle';
     previewCtx.fillText(text, w / 2, h / 2);
+  }
+
+  function setSwingDurationText(value) {
+    if (!swingDuration) return;
+    swingDuration.textContent = value ? `Swing duration: ${value}` : 'Swing duration: --';
+  }
+
+  function resizeOverlay() {
+    if (!liveOverlay || !liveVideo) return;
+    const width = liveVideo.videoWidth || 640;
+    const height = liveVideo.videoHeight || 360;
+    liveOverlay.width = width;
+    liveOverlay.height = height;
+  }
+
+  function clearOverlay() {
+    if (!overlayCtx || !liveOverlay) return;
+    overlayCtx.clearRect(0, 0, liveOverlay.width, liveOverlay.height);
+  }
+
+  function isLandmarkVisible(lm, margin) {
+    if (!lm) return false;
+    if (typeof lm.visibility === 'number' && lm.visibility < 0.5) return false;
+    return lm.x > margin && lm.x < 1 - margin && lm.y > margin && lm.y < 1 - margin;
+  }
+
+  function updateFullBodyStatus(landmarks) {
+    if (!fullBodyStatus) return false;
+    if (!landmarks) {
+      fullBodyStatus.textContent = 'Full body: --';
+      fullBodyStatus.classList.remove('ok');
+      return false;
+    }
+    const margin = 0.04;
+    const required = [11, 12, 23, 24, 27, 28];
+    const ok = required.every((idx) => isLandmarkVisible(landmarks[idx], margin));
+    fullBodyStatus.textContent = ok ? 'Full body detected' : 'Full body: adjust camera';
+    fullBodyStatus.classList.toggle('ok', ok);
+    return ok;
+  }
+
+  const POSE_CONNECTIONS = [
+    [11, 12], [11, 23], [12, 24], [23, 24],
+    [11, 13], [13, 15], [12, 14], [14, 16],
+    [23, 25], [25, 27], [24, 26], [26, 28]
+  ];
+
+  function drawPose(landmarks) {
+    if (!overlayCtx || !liveOverlay || !landmarks) return;
+    const w = liveOverlay.width;
+    const h = liveOverlay.height;
+    overlayCtx.clearRect(0, 0, w, h);
+    overlayCtx.lineWidth = 2;
+    overlayCtx.strokeStyle = 'rgba(0, 255, 140, 0.9)';
+    overlayCtx.fillStyle = 'rgba(0, 255, 140, 0.9)';
+
+    POSE_CONNECTIONS.forEach(([a, b]) => {
+      const la = landmarks[a];
+      const lb = landmarks[b];
+      if (!la || !lb) return;
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(la.x * w, la.y * h);
+      overlayCtx.lineTo(lb.x * w, lb.y * h);
+      overlayCtx.stroke();
+    });
+
+    landmarks.forEach((lm) => {
+      if (!lm) return;
+      overlayCtx.beginPath();
+      overlayCtx.arc(lm.x * w, lm.y * h, 3, 0, Math.PI * 2);
+      overlayCtx.fill();
+    });
   }
 
   function drawFrame() {
@@ -97,6 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (liveVideo) {
       liveVideo.srcObject = null;
     }
+    clearOverlay();
   }
 
   function stopRecording() {
@@ -120,12 +205,16 @@ document.addEventListener('DOMContentLoaded', function() {
     videoInput.dispatchEvent(new Event('change'));
     updatePreviewFromFile(file);
     if (previewHint) previewHint.textContent = 'Recorded video ready. Click the preview to play/pause.';
+    if (recordedActions) recordedActions.hidden = false;
+    if (analyzeBtn) analyzeBtn.hidden = true;
   }
 
   function startRecording() {
     if (!liveStream || isRecording) return;
     if (liveStatus) liveStatus.textContent = 'Recording...';
     recordedChunks = [];
+    recordStartTime = performance.now();
+    setSwingDurationText('--');
     mediaRecorder = new MediaRecorder(liveStream, { mimeType: 'video/webm;codecs=vp8' });
     mediaRecorder.ondataavailable = function(event) {
       if (event.data && event.data.size > 0) {
@@ -133,6 +222,10 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     };
     mediaRecorder.onstop = function() {
+      if (recordStartTime) {
+        const elapsed = (performance.now() - recordStartTime) / 1000;
+        setSwingDurationText(`${elapsed.toFixed(1)}s`);
+      }
       finalizeRecording();
       if (liveStatus) liveStatus.textContent = 'Recording stopped. Preview updated.';
       recordBtn.textContent = 'Record Video';
@@ -204,9 +297,11 @@ document.addEventListener('DOMContentLoaded', function() {
     pose.onResults((results) => {
       const landmarks = results.poseLandmarks;
       if (!isArmed || !landmarks) return;
+      fullBodyDetected = updateFullBodyStatus(landmarks);
+      drawPose(landmarks);
 
       if (!isRecording) {
-        if (isAddressPose(landmarks)) {
+        if (fullBodyDetected && isAddressPose(landmarks)) {
           addressCount += 1;
         } else {
           addressCount = 0;
@@ -264,8 +359,17 @@ document.addEventListener('DOMContentLoaded', function() {
     liveStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     liveVideo.srcObject = liveStream;
     await liveVideo.play();
+    resizeOverlay();
+    liveVideo.onloadedmetadata = resizeOverlay;
     if (liveBox) liveBox.hidden = false;
     if (liveStatus) liveStatus.textContent = 'Stand in address position to start recording.';
+    setSwingDurationText('--');
+    if (fullBodyStatus) {
+      fullBodyStatus.textContent = 'Full body: --';
+      fullBodyStatus.classList.remove('ok');
+    }
+    if (recordedActions) recordedActions.hidden = true;
+    if (analyzeBtn) analyzeBtn.hidden = false;
 
     await setupPose();
     processLiveFrame();
@@ -313,8 +417,46 @@ document.addEventListener('DOMContentLoaded', function() {
     stopLiveStream();
     isArmed = false;
     if (recordBtn) recordBtn.textContent = 'Record Video';
+    if (recordedActions) recordedActions.hidden = true;
+    if (analyzeBtn) analyzeBtn.hidden = false;
     updatePreviewFromFile(file);
   });
+
+  if (useSwingBtn && uploadForm) {
+    useSwingBtn.addEventListener('click', function() {
+      if (!videoInput.files || videoInput.files.length === 0) return;
+      if (loadingOverlay) loadingOverlay.hidden = false;
+      uploadForm.submit();
+    });
+  }
+
+  if (retakeBtn) {
+    retakeBtn.addEventListener('click', async function() {
+      stopLiveStream();
+      if (recordedActions) recordedActions.hidden = true;
+      if (previewHint) previewHint.textContent = 'No video selected.';
+      if (previewVideo) previewVideo.src = '';
+      drawPlaceholder('No video selected');
+      videoInput.value = '';
+      try {
+        isArmed = true;
+        recordBtn.textContent = 'Recording Armed';
+        resetDetectionCounters();
+        await startLivePreview();
+      } catch (err) {
+        console.error(err);
+        alert('Unable to start live video. Please check camera permissions.');
+        isArmed = false;
+        recordBtn.textContent = 'Record Video';
+      }
+    });
+  }
+
+  if (uploadForm) {
+    uploadForm.addEventListener('submit', function() {
+      if (loadingOverlay) loadingOverlay.hidden = false;
+    });
+  }
 
   if (previewCanvas && previewVideo) {
     previewCanvas.addEventListener('click', function() {

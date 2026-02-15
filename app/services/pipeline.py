@@ -23,6 +23,7 @@ from app.services.biomech import (
     compute_swing_metrics,
     _score_to_confidence,
 )
+from app.services.video_service import trim_video_by_frames
 from app.services.tts_service import generate_audio_feedback
 from app.services.validation import (
     POSE_MIN_RATIO,
@@ -58,15 +59,19 @@ class GolfAssistant:
         self.weights_path = str(weights_path or config.SWINGNET_WEIGHTS)
         self.out_dir = str(out_dir or config.OUTPUTS_DIR)
 
+        self.det_obj_model_path = det_obj_model_path or config.MEDIAPIPE_OBJ_MODEL
+        self.det_pose_model_path = det_pose_model_path or config.MEDIAPIPE_POSE_MODEL
+        self.det_input_scale = det_input_scale if det_input_scale is not None else config.DETECTION_INPUT_SCALE
+
         self.annotated_base = os.path.join(self.out_dir, "annotated.mp4")
         self.annotated_out = os.path.join(self.out_dir, "annotated_with_labels.mp4")
         self.pred_json = os.path.join(self.out_dir, "predicted_events.json")
         self.feedback_audio = os.path.join(self.out_dir, "feedback.wav")
 
         self.detector = DetectorPipeline(
-            obj_model_path=det_obj_model_path or config.MEDIAPIPE_OBJ_MODEL,
-            pose_model_path=det_pose_model_path or config.MEDIAPIPE_POSE_MODEL,
-            input_scale=det_input_scale if det_input_scale is not None else config.DETECTION_INPUT_SCALE,
+            obj_model_path=self.det_obj_model_path,
+            pose_model_path=self.det_pose_model_path,
+            input_scale=self.det_input_scale,
         )
 
         self.crop_expand = crop_expand
@@ -351,7 +356,7 @@ class GolfAssistant:
         cap.release()
         return exported
 
-    def run(self):
+    def run(self, allow_trim: bool = True):
         pipeline_start = time.time()
 
         file_ok, file_message, file_info = validate_file_level(self.video_path)
@@ -474,6 +479,31 @@ class GolfAssistant:
                 },
             )
 
+        events_map = {EVENT_LIST[i]: int(ef) for i, ef in enumerate(event_frames)}
+
+        if allow_trim:
+            trimmed_path = trim_video_by_frames(
+                self.video_path,
+                events_map.get("Address", 0),
+                events_map.get("Finish", 0),
+            )
+            if trimmed_path:
+                rerun = GolfAssistant(
+                    video_path=str(trimmed_path),
+                    weights_path=self.weights_path,
+                    out_dir=self.out_dir,
+                    det_obj_model_path=self.det_obj_model_path,
+                    det_pose_model_path=self.det_pose_model_path,
+                    det_input_scale=self.det_input_scale,
+                    crop_expand=self.crop_expand,
+                    target_size=self.target_size,
+                    auto_stride=self.auto_stride,
+                    max_detector_stride=self.max_detector_stride,
+                )
+                rerun_result = rerun.run(allow_trim=False)
+                rerun_result["trimmed_video"] = str(trimmed_path)
+                return rerun_result
+
         stage_start = time.time()
         summary = {"predicted_events": []}
         for i, ef in enumerate(event_frames):
@@ -498,7 +528,6 @@ class GolfAssistant:
         self.timing["7b. Frame Export"] = time.time() - stage_start
 
         stage_start = time.time()
-        events_map = {EVENT_LIST[i]: int(ef) for i, ef in enumerate(event_frames)}
 
         faults = []
         head_flag, head_score = detect_head_movement(

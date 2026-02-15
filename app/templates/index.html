@@ -20,6 +20,7 @@
             action="/analyze"
             method="post"
             enctype="multipart/form-data"
+            id="uploadForm"
           >
             <div class="section-header">
               <h2 class="section-title">Upload Your Golf Swing Video</h2>
@@ -100,6 +101,10 @@
 
             <div class="live-box" id="liveBox" hidden>
               <h3 class="preview-title">Live camera</h3>
+              <div class="live-status-row">
+                <span class="status-pill" id="fullBodyStatus">Full body: --</span>
+                <span class="status-text" id="swingDuration">Swing duration: --</span>
+              </div>
               <div class="live-video-wrap">
                 <video
                   id="liveVideo"
@@ -107,6 +112,7 @@
                   playsinline
                   muted
                 ></video>
+                <canvas id="liveOverlay" class="live-overlay" width="640" height="360"></canvas>
               </div>
               <p class="preview-hint" id="liveStatus">
                 Waiting for camera permission...
@@ -134,13 +140,25 @@
             <button class="btn btn-secondary" type="button" id="chooseFileBtn">
               Choose File
             </button>
-            <button class="btn btn-primary" type="submit">Analyze Swing</button>
+            <button class="btn btn-primary" type="submit" id="analyzeBtn">Analyze Swing</button>
+
+            <div class="recorded-actions" id="recordedActions" hidden>
+              <button class="btn btn-primary" type="button" id="useSwingBtn">Use this swing</button>
+              <button class="btn btn-secondary" type="button" id="retakeBtn">Retake</button>
+            </div>
           </form>
         </div>
 
         <p class="footer-text">
           AI Golf Assistant - Your personal golf assistant
         </p>
+      </div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay" hidden>
+      <div class="loading-card">
+        <div class="spinner"></div>
+        <p>Analyzing your swing...</p>
       </div>
     </div>
 
