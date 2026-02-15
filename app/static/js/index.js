@@ -419,12 +419,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (recordBtn) recordBtn.textContent = 'Record Video';
     if (recordedActions) recordedActions.hidden = true;
     if (analyzeBtn) analyzeBtn.hidden = false;
+    if (uploadForm) uploadForm.action = '/analyze';
     updatePreviewFromFile(file);
   });
 
   if (useSwingBtn && uploadForm) {
     useSwingBtn.addEventListener('click', function() {
       if (!videoInput.files || videoInput.files.length === 0) return;
+      uploadForm.action = '/analyze-live';
       if (loadingOverlay) loadingOverlay.hidden = false;
       uploadForm.submit();
     });
@@ -454,6 +456,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (uploadForm) {
     uploadForm.addEventListener('submit', function() {
+      if (!uploadForm.action) uploadForm.action = '/analyze';
       if (loadingOverlay) loadingOverlay.hidden = false;
     });
   }

@@ -84,17 +84,40 @@
           <div class="feedback-container frames-section">
             <h3 class="feedback-title"> Swing Phases</h3>
             <div class="feedback-content frames-content">
-              <div class="frames-grid">
-                {% for item in event_frame_images %}
-                <div class="frame-card">
-                  <div class="frame-meta">
-                    <span class="frame-label">{{ item.event_name }}</span>
-                    <span class="frame-conf">{{ '%.0f'|format((item.confidence or 0) * 100) }}%</span>
+              <div class="frames-layout">
+                <div class="frames-preview">
+                  <div class="frames-preview-media">
+                    <img
+                      id="phasePreview"
+                      src="{{ event_frame_images[0].image_url }}"
+                      alt="Swing phase preview"
+                    />
                   </div>
-                  <img class="frame-image" src="{{ item.image_url }}" alt="{{ item.event_name }} frame" />
-                  <div class="frame-index">Frame {{ item.frame_index }}</div>
+                  <div class="frames-preview-meta">
+                    <span id="phaseLabel" class="preview-label">{{ event_frame_images[0].event_name }}</span>
+                    <span id="phaseConf" class="preview-conf">
+                      {{ '%.0f'|format((event_frame_images[0].confidence or 0) * 100) }}%
+                    </span>
+                    <span id="phaseIndex" class="preview-index">Frame {{ event_frame_images[0].frame_index }}</span>
+                  </div>
                 </div>
-                {% endfor %}
+                <div class="frames-timeline" role="tablist" aria-label="Swing phases">
+                  {% for item in event_frame_images %}
+                  <button
+                    class="phase-btn{% if loop.index0 == 0 %} is-active{% endif %}"
+                    type="button"
+                    data-image="{{ item.image_url }}"
+                    data-label="{{ item.event_name }}"
+                    data-conf="{{ '%.0f'|format((item.confidence or 0) * 100) }}%"
+                    data-frame="Frame {{ item.frame_index }}"
+                    role="tab"
+                    aria-selected="{% if loop.index0 == 0 %}true{% else %}false{% endif %}"
+                  >
+                    <span class="phase-name">{{ item.event_name }}</span>
+                    <span class="phase-percent">{{ '%.0f'|format((item.confidence or 0) * 100) }}%</span>
+                  </button>
+                  {% endfor %}
+                </div>
               </div>
             </div>
           </div>
@@ -123,7 +146,6 @@
             <div class="feedback-content">
               {% if validation and not validation.valid %}
               <div class="no-faults-message">
-                <span class="warning-icon">⚠️</span>
                 <p class="feedback-text">
                   Swing validation failed. No fault analysis was performed.
                 </p>
@@ -143,7 +165,6 @@
               </div>
               {% else %}
               <div class="no-faults-message">
-                <span class="success-icon">✅</span>
                 <p class="feedback-text">Excellent! No major faults detected in your swing.</p>
               </div>
               {% endif %}
@@ -203,5 +224,46 @@
         </div>
       </div>
     </div>
+    <script>
+      (function () {
+        var buttons = document.querySelectorAll('.phase-btn');
+        if (!buttons.length) {
+          return;
+        }
+        var preview = document.getElementById('phasePreview');
+        var label = document.getElementById('phaseLabel');
+        var conf = document.getElementById('phaseConf');
+        var index = document.getElementById('phaseIndex');
+
+        function setActive(button) {
+          buttons.forEach(function (btn) {
+            btn.classList.remove('is-active');
+            btn.setAttribute('aria-selected', 'false');
+          });
+          button.classList.add('is-active');
+          button.setAttribute('aria-selected', 'true');
+
+          if (preview) {
+            preview.src = button.getAttribute('data-image') || '';
+            preview.alt = (button.getAttribute('data-label') || 'Swing phase') + ' preview';
+          }
+          if (label) {
+            label.textContent = button.getAttribute('data-label') || '';
+          }
+          if (conf) {
+            conf.textContent = button.getAttribute('data-conf') || '';
+          }
+          if (index) {
+            index.textContent = button.getAttribute('data-frame') || '';
+          }
+        }
+
+        buttons.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            setActive(btn);
+          });
+        });
+      })();
+    </script>
   </body>
 </html>

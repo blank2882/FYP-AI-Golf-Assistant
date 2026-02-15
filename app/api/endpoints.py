@@ -28,7 +28,78 @@ def analyze(request: Request, video: UploadFile = File(...)):
     run_dir = create_run_dir()
 
     assistant = GolfAssistant(video_path=str(video_path), out_dir=str(run_dir))
-    result = assistant.run()
+    result = assistant.run(allow_trim=False)
+
+    validation = result.get("validation") or {}
+    is_valid = bool(validation.get("valid", True))
+    if not is_valid:
+        message = validation.get("message") or "Unable to detect a valid golf swing."
+        return templates.TemplateResponse(
+            "result.html",
+            {
+                "request": request,
+                "annotated_video": None,
+                "feedback_text": message,
+                "faults": [],
+                "metrics": result.get("metrics") or {},
+                "audio_feedback": None,
+                "event_frames": [],
+                "event_frame_images": [],
+                "confidences": [],
+                "validation": validation,
+            },
+        )
+
+    faults = result.get("faults", [])
+    fault_items = [{"name": f[0], "score": float(f[1]), "confidence": float(f[2])} for f in faults]
+
+    annotated_video = None
+    if result.get("annotated_video"):
+        annotated_video = _to_static_url(result["annotated_video"])
+
+    audio_feedback = None
+    if result.get("audio_feedback"):
+        audio_feedback = _to_static_url(result["audio_feedback"])
+
+    event_frame_images = []
+    for item in result.get("event_frame_images") or []:
+        image_url = _to_static_url(item.get("image_path"))
+        if not image_url:
+            continue
+        event_frame_images.append(
+            {
+                "event_name": item.get("event_name"),
+                "frame_index": item.get("frame_index"),
+                "confidence": item.get("confidence"),
+                "image_url": image_url,
+            }
+        )
+
+    return templates.TemplateResponse(
+        "result.html",
+        {
+            "request": request,
+            "annotated_video": annotated_video,
+            "feedback_text": result.get("feedback") or "No feedback generated.",
+            "faults": fault_items,
+            "metrics": result.get("metrics") or {},
+            "audio_feedback": audio_feedback,
+            "event_frames": result.get("event_frames") or [],
+            "event_frame_images": event_frame_images,
+            "confidences": result.get("confidences") or [],
+            "validation": validation,
+        },
+    )
+
+
+@router.post("/analyze-live", response_class=HTMLResponse)
+def analyze_live(request: Request, video: UploadFile = File(...)):
+    config.ensure_directories()
+    video_path = save_upload(video)
+    run_dir = create_run_dir()
+
+    assistant = GolfAssistant(video_path=str(video_path), out_dir=str(run_dir))
+    result = assistant.run(allow_trim=True)
 
     validation = result.get("validation") or {}
     is_valid = bool(validation.get("valid", True))
@@ -99,7 +170,7 @@ def analyze_api(video: UploadFile = File(...)):
     run_dir = create_run_dir()
 
     assistant = GolfAssistant(video_path=str(video_path), out_dir=str(run_dir))
-    result = assistant.run()
+    result = assistant.run(allow_trim=False)
 
     validation = result.get("validation") or {}
     is_valid = bool(validation.get("valid", True))
