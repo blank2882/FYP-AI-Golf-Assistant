@@ -18,7 +18,7 @@ templates = Jinja2Templates(directory=str(config.APP_DIR / "templates"))
 
 @router.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html", context={})
 
 
 @router.post("/analyze", response_class=HTMLResponse)
@@ -35,9 +35,9 @@ def analyze(request: Request, video: UploadFile = File(...)):
     if not is_valid:
         message = validation.get("message") or "Unable to detect a valid golf swing."
         return templates.TemplateResponse(
-            "result.html",
-            {
-                "request": request,
+            request=request,
+            name="result.html",
+            context={
                 "annotated_video": None,
                 "feedback_text": message,
                 "faults": [],
@@ -76,9 +76,9 @@ def analyze(request: Request, video: UploadFile = File(...)):
         )
 
     return templates.TemplateResponse(
-        "result.html",
-        {
-            "request": request,
+        request=request,
+        name="result.html",
+        context={
             "annotated_video": annotated_video,
             "feedback_text": result.get("feedback") or "No feedback generated.",
             "faults": fault_items,
@@ -106,9 +106,9 @@ def analyze_live(request: Request, video: UploadFile = File(...)):
     if not is_valid:
         message = validation.get("message") or "Unable to detect a valid golf swing."
         return templates.TemplateResponse(
-            "result.html",
-            {
-                "request": request,
+            request=request,
+            name="result.html",
+            context={
                 "annotated_video": None,
                 "feedback_text": message,
                 "faults": [],
@@ -147,9 +147,9 @@ def analyze_live(request: Request, video: UploadFile = File(...)):
         )
 
     return templates.TemplateResponse(
-        "result.html",
-        {
-            "request": request,
+        request=request,
+        name="result.html",
+        context={
             "annotated_video": annotated_video,
             "feedback_text": result.get("feedback") or "No feedback generated.",
             "faults": fault_items,

@@ -381,30 +381,6 @@ document.addEventListener('DOMContentLoaded', function() {
     videoInput.click();
   });
 
-  recordBtn.addEventListener('click', async function() {
-    if (isArmed) {
-      if (liveStatus) liveStatus.textContent = 'Recording cancelled.';
-      stopRecording();
-      stopLiveStream();
-      if (liveBox) liveBox.hidden = true;
-      recordBtn.textContent = 'Record Video';
-      isArmed = false;
-      return;
-    }
-
-    try {
-      isArmed = true;
-      recordBtn.textContent = 'Recording Armed';
-      resetDetectionCounters();
-      await startLivePreview();
-    } catch (err) {
-      console.error(err);
-      alert('Unable to start live video. Please check camera permissions.');
-      isArmed = false;
-      recordBtn.textContent = 'Record Video';
-    }
-  });
-
   videoInput.addEventListener('change', function() {
     const file = videoInput.files && videoInput.files[0];
     if (!file || !previewVideo) {
@@ -419,14 +395,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (recordBtn) recordBtn.textContent = 'Record Video';
     if (recordedActions) recordedActions.hidden = true;
     if (analyzeBtn) analyzeBtn.hidden = false;
-    if (uploadForm) uploadForm.action = '/analyze';
     updatePreviewFromFile(file);
   });
 
   if (useSwingBtn && uploadForm) {
     useSwingBtn.addEventListener('click', function() {
       if (!videoInput.files || videoInput.files.length === 0) return;
-      uploadForm.action = '/analyze-live';
       if (loadingOverlay) loadingOverlay.hidden = false;
       uploadForm.submit();
     });
@@ -456,7 +430,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (uploadForm) {
     uploadForm.addEventListener('submit', function() {
-      if (!uploadForm.action) uploadForm.action = '/analyze';
       if (loadingOverlay) loadingOverlay.hidden = false;
     });
   }

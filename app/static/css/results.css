@@ -439,6 +439,69 @@ body {
   margin-bottom: 8px;
 }
 
+.metric-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.metric-header .metric-label {
+  margin-bottom: 0;
+}
+
+.metric-info {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid #7e57c2;
+  background: #f3e5f5;
+  color: #5e35b1;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.metric-info:hover {
+  background: #e1bee7;
+}
+
+.metric-info:focus-visible {
+  outline: 2px solid #5e35b1;
+  outline-offset: 2px;
+}
+
+.metric-tooltip {
+  display: none;
+  position: absolute;
+  top: 28px;
+  right: 0;
+  z-index: 20;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #b39ddb;
+  background: #fff;
+  color: #2c2c2c;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: left;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.metric-info.is-open .metric-tooltip {
+  display: block;
+}
+
 .metric-value {
   display: block;
   font-size: 24px;
