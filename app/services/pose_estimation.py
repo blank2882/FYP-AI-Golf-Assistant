@@ -1,4 +1,8 @@
-"""MediaPipe-based object and pose detection utilities."""
+"""MediaPipe-based object and pose detection utilities.
+
+The pipeline first detects the person bounding box, then extracts pose
+landmarks for that frame, and optionally stores metadata for later stages.
+"""
 from __future__ import annotations
 
 import json
@@ -34,6 +38,7 @@ def create_object_detector(det_obj_model_path: Optional[str | os.PathLike] = Non
         base_options=base_options(model_asset_path=str(det_obj_model_path)),
         max_results=1,
         running_mode=vision_running_mode.VIDEO,
+        # Restrict categories so detector focuses on the golfer only.
         category_allowlist=["person"],
     )
     detector = object_detector.create_from_options(options)
@@ -139,6 +144,7 @@ class DetectorPipeline:
         self.input_scale = float(input_scale)
 
     def process_frame(self, bgr_frame: np.ndarray, timestamp_ms: int = 0, return_metadata: bool = False):
+        # Process one frame end-to-end and optionally return structured metadata.
         if bgr_frame is None:
             raise ValueError("bgr_frame must be a valid OpenCV image")
 
@@ -184,6 +190,7 @@ class DetectorPipeline:
             metadata["pose"].append(lm_list)
 
         for det in getattr(obj_result, "detections", []) or []:
+            # Store detector outputs as plain JSON-friendly primitives.
             bbox = getattr(det, "bounding_box", None)
             cats = getattr(det, "categories", []) or []
             category = cats[0] if cats else None

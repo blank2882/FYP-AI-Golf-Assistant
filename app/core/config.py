@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# Resolve project root from this file location so paths work regardless of launch folder.
 BASE_DIR = Path(__file__).resolve().parents[2]
 APP_DIR = BASE_DIR / "app"
 
+# Input and output folders used during request processing.
 DATA_DIR = BASE_DIR / "data"
 UPLOADS_DIR = BASE_DIR / "uploads"
 RAW_UPLOADS_DIR = UPLOADS_DIR / "raw"
@@ -28,6 +30,7 @@ DETECTION_INPUT_SCALE = 0.65
 
 
 def ensure_directories() -> None:
+    # Create all runtime directories if they do not exist (safe to call repeatedly).
     for path in [
         UPLOADS_DIR,
         RAW_UPLOADS_DIR,

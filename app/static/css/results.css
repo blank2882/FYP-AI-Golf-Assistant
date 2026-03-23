@@ -2,6 +2,12 @@
    RESULTS PAGE STYLES (result.html)
    ============================================ */
 
+/*
+  Student note:
+  The page is split into reusable "feedback-container" cards, then each
+  section (validation, phases, faults, metrics) adds its own color theme.
+*/
+
 /* Global Styles */
 * {
   margin: 0;
@@ -193,6 +199,7 @@ body {
   color: #1e3a5f;
 }
 .frames-timeline {
+  /* Horizontal scroll keeps phase cards usable on smaller screens. */
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(120px, 1fr);
@@ -372,6 +379,7 @@ body {
 }
 
 .signal-row {
+  /* Three-column layout: label, progress bar, numeric percentage. */
   display: grid;
   grid-template-columns: 1fr 2fr auto;
   gap: 12px;

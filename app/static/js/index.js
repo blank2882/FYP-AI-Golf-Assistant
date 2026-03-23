@@ -1,3 +1,8 @@
+// Frontend controller for upload/preview and optional live-record flow.
+// Main responsibilities:
+// 1) manage file input + preview canvas,
+// 2) run lightweight pose checks during recording,
+// 3) submit video and show loading state.
 document.addEventListener('DOMContentLoaded', function() {
   const videoInput = document.getElementById('videoInput');
   const chooseFileBtn = document.getElementById('chooseFileBtn');
@@ -35,6 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let recordStartTime = null;
 
   function drawPlaceholder(text) {
+    // Draw a simple fallback frame on the preview canvas before a video is loaded.
     if (!previewCtx || !previewCanvas) return;
     const w = previewCanvas.width;
     const h = previewCanvas.height;
@@ -72,6 +78,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function updateFullBodyStatus(landmarks) {
+    // Require shoulders, hips, and ankles to be visible before arming recording.
     if (!fullBodyStatus) return false;
     if (!landmarks) {
       fullBodyStatus.textContent = 'Full body: --';
@@ -93,6 +100,7 @@ document.addEventListener('DOMContentLoaded', function() {
   ];
 
   function drawPose(landmarks) {
+    // Render a minimal skeleton overlay to help the user position themselves.
     if (!overlayCtx || !liveOverlay || !landmarks) return;
     const w = liveOverlay.width;
     const h = liveOverlay.height;

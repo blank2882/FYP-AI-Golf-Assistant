@@ -1,4 +1,8 @@
-"""LLM feedback generation (Ollama)."""
+"""LLM feedback generation (Ollama).
+
+This module builds a constrained coaching prompt and then calls Ollama
+either via HTTP API or local CLI.
+"""
 from __future__ import annotations
 
 import json
@@ -20,6 +24,7 @@ def ollama_http_available(url: str = "http://localhost:11434") -> bool:
 
 
 def _kp_snippet_for_events(kps, events):
+    # Keep only tiny frame windows around key swing events to reduce prompt size.
     num_frames = kps.shape[0]
     snippet = {}
     for ev, idx in events.items():
@@ -35,6 +40,7 @@ def build_prompt(events, kps, faults):
 
     selected_faults = faults
     if isinstance(faults, list) and len(faults) > 0:
+        # Keep only the most severe fault so generated advice stays focused.
         def _fault_score_tuple(f):
             if isinstance(f, (list, tuple)):
                 score = float(f[1]) if len(f) > 1 else 0.0
@@ -108,6 +114,7 @@ def generate_feedback_ollama_cli(events, kps, faults, model: str = "qwen2.5"):
 
 
 def generate_feedback(events, kps, faults, prefer_http: bool = True, model: str = "qwen2.5"):
+    # Prefer HTTP because it is faster and easier to monitor; CLI is a fallback path.
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     if prefer_http and ollama_http_available(base_url):
         try:

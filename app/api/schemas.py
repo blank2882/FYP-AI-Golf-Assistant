@@ -6,12 +6,14 @@ from pydantic import BaseModel
 
 
 class FaultItem(BaseModel):
+    # One detected swing fault with its raw severity score and confidence.
     name: str
     score: float
     confidence: float  # 0-1 confidence score (how confident the detection is)
 
 
 class AnalysisResponse(BaseModel):
+    # Full response contract returned by /api/analyze.
     job_id: str
     annotated_video: Optional[str]
     json_path: Optional[str]

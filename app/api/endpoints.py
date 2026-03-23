@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
+from typing import Any, cast
 
 from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import HTMLResponse
@@ -13,26 +13,32 @@ from app.services.pipeline import GolfAssistant
 from app.api.schemas import AnalysisResponse, FaultItem
 
 router = APIRouter()
+# Jinja2Templates lets FastAPI render server-side HTML pages with dynamic values.
 templates = Jinja2Templates(directory=str(config.APP_DIR / "templates"))
 
 
 @router.get("/", response_class=HTMLResponse)
 def index(request: Request):
+    # Render the upload page.
     return templates.TemplateResponse(request=request, name="index.html", context={})
 
 
 @router.post("/analyze", response_class=HTMLResponse)
 def analyze(request: Request, video: UploadFile = File(...)):
+    # HTML flow for uploaded videos: save upload -> run pipeline -> render result page.
     config.ensure_directories()
     video_path = save_upload(video)
     run_dir = create_run_dir()
 
     assistant = GolfAssistant(video_path=str(video_path), out_dir=str(run_dir))
-    result = assistant.run(allow_trim=False)
+    # `GolfAssistant.run` currently returns a loosely-typed dict.
+    # Cast to `dict[str, Any]` so static type-checking knows `.get()` and iteration are valid.
+    result = cast(dict[str, Any], assistant.run(allow_trim=False))
 
     validation = result.get("validation") or {}
     is_valid = bool(validation.get("valid", True))
     if not is_valid:
+        # If validation fails, return the result page with a user-friendly failure message.
         message = validation.get("message") or "Unable to detect a valid golf swing."
         return templates.TemplateResponse(
             request=request,
@@ -63,6 +69,7 @@ def analyze(request: Request, video: UploadFile = File(...)):
 
     event_frame_images = []
     for item in result.get("event_frame_images") or []:
+        # Convert local file paths into browser-safe URLs.
         image_url = _to_static_url(item.get("image_path"))
         if not image_url:
             continue
@@ -94,12 +101,15 @@ def analyze(request: Request, video: UploadFile = File(...)):
 
 @router.post("/analyze-live", response_class=HTMLResponse)
 def analyze_live(request: Request, video: UploadFile = File(...)):
+    # Live-capture flow: identical output format, but allows trimming to the detected swing.
     config.ensure_directories()
     video_path = save_upload(video)
     run_dir = create_run_dir()
 
     assistant = GolfAssistant(video_path=str(video_path), out_dir=str(run_dir))
-    result = assistant.run(allow_trim=True)
+    # `GolfAssistant.run` currently returns a loosely-typed dict.
+    # Cast to `dict[str, Any]` so static type-checking knows `.get()` and iteration are valid.
+    result = cast(dict[str, Any], assistant.run(allow_trim=True))
 
     validation = result.get("validation") or {}
     is_valid = bool(validation.get("valid", True))
@@ -165,12 +175,15 @@ def analyze_live(request: Request, video: UploadFile = File(...)):
 
 @router.post("/api/analyze", response_model=AnalysisResponse)
 def analyze_api(video: UploadFile = File(...)):
+    # JSON API flow for programmatic clients (mobile app, future frontend, etc.).
     config.ensure_directories()
     video_path = save_upload(video)
     run_dir = create_run_dir()
 
     assistant = GolfAssistant(video_path=str(video_path), out_dir=str(run_dir))
-    result = assistant.run(allow_trim=False)
+    # `GolfAssistant.run` currently returns a loosely-typed dict.
+    # Cast to `dict[str, Any]` so static type-checking knows `.get()` and iteration are valid.
+    result = cast(dict[str, Any], assistant.run(allow_trim=False))
 
     validation = result.get("validation") or {}
     is_valid = bool(validation.get("valid", True))
@@ -197,6 +210,7 @@ def analyze_api(video: UploadFile = File(...)):
 
 
 def _to_static_url(path_value: str | None) -> str | None:
+    # Normalize absolute file paths into URLs relative to the project root.
     if not path_value:
         return None
     p = Path(path_value)

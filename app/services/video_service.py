@@ -1,4 +1,8 @@
-"""Video upload and storage helpers."""
+"""Video upload and storage helpers.
+
+Provides small utility functions for storing uploads and trimming clips
+to the swing interval.
+"""
 from __future__ import annotations
 
 import shutil
@@ -11,6 +15,7 @@ from app.core import config
 
 
 def create_run_dir() -> Path:
+    # Use a UUID folder per request so generated outputs never collide.
     run_id = uuid.uuid4().hex
     run_dir = config.OUTPUTS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -18,6 +23,7 @@ def create_run_dir() -> Path:
 
 
 def save_upload(upload_file, dest_dir: Path | None = None) -> Path:
+    # Persist FastAPI UploadFile stream to disk and return the saved path.
     if dest_dir is None:
         dest_dir = config.RAW_UPLOADS_DIR
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -35,6 +41,7 @@ def trim_video_by_frames(
     end_frame: int,
     output_dir: Path | None = None,
 ) -> Path | None:
+    # Create a shorter clip between detected start/end frame indices.
     if end_frame <= start_frame:
         return None
 

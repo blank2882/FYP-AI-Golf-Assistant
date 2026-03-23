@@ -1,4 +1,9 @@
-"""Biomechanics metrics and rule-based fault detection."""
+"""Biomechanics metrics and rule-based fault detection.
+
+This module converts pose keypoints into interpretable golf metrics.
+The checks here are deterministic rules (not ML predictions), which
+makes them easier to debug and explain.
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -34,6 +39,7 @@ def _score_to_confidence(fault_name: str, score: float, alpha: float = 6.0) -> f
 
 
 def _has_mediapipe_format(kps: np.ndarray) -> bool:
+    # MediaPipe Pose has 33 landmarks, while alternative layouts in this project are smaller.
     return kps.shape[1] > 24
 
 
@@ -109,6 +115,7 @@ def detect_head_movement(
     impact_frame: int | None = None,
     head_threshold: float = 0.04,
 ):
+    # Compare nose displacement between address and impact, normalized by shoulder width.
     T = kps_seq.shape[0]
     impact = T - 1 if impact_frame is None else impact_frame
     nose_address = kps_seq[address_frame, 0, :2]
@@ -125,6 +132,7 @@ def detect_slide_or_sway(
     impact_frame: int | None = None,
     lateral_threshold: float = 0.12,
 ):
+    # Lateral hip movement near impact is treated as a "slide" fault.
     T = kps_seq.shape[0]
     impact = T - 1 if impact_frame is None else impact_frame
     hips = compute_hip_centers(kps_seq)
@@ -222,6 +230,7 @@ def compute_swing_metrics(
     impact_frame: int | None = None,
     top_frame: int | None = None,
 ):
+    # Derive compact numeric metrics for UI display and downstream logging.
     T = kps_seq.shape[0]
     impact = T - 1 if impact_frame is None else impact_frame
     swing_duration = impact - address_frame

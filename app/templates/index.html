@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/static/css/upload.css?v=20260212" />
   </head>
   <body>
+    <!-- Upload page: user instructions, video picker, and preview canvas. -->
     <div class="page-container">
       <div class="upload-page">
         <div class="card">
@@ -22,6 +23,7 @@
             enctype="multipart/form-data"
             id="uploadForm"
           >
+            <!-- Intro + usage guidance blocks -->
             <div class="section-header">
               <h2 class="section-title">Upload Your Golf Swing Video</h2>
               <p class="section-description">
@@ -87,6 +89,7 @@
             </div>
 
             <div class="preview-box">
+              <!-- Canvas-based preview gives immediate feedback before upload. -->
               <h3 class="preview-title">Video preview</h3>
               <div class="preview-canvas-wrap">
                 <canvas
@@ -114,6 +117,7 @@
               style="display: none"
               required
             />
+            <!-- Primary actions: pick file then send it to /analyze. -->
             <button class="btn btn-secondary" type="button" id="chooseFileBtn">
               Choose File
             </button>

@@ -2,6 +2,12 @@
    UPLOAD PAGE STYLES (index.html)
    ============================================ */
 
+/*
+  Student note:
+  This stylesheet is organized by responsibility: layout, typography,
+  component blocks (tips/preview/live), and responsive overrides.
+*/
+
 /* Global Styles */
 * {
   margin: 0;
@@ -179,6 +185,7 @@ body {
 }
 
 .preview-video {
+  /* Hidden <video> element is used as a frame source for the canvas preview. */
   display: none;
 }
 

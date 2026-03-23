@@ -1,4 +1,8 @@
-"""Text-to-speech service wrapper."""
+"""Text-to-speech service wrapper.
+
+This module cleans LLM output text and synthesizes a WAV file that can
+be played on the results page.
+"""
 from __future__ import annotations
 
 import json
@@ -18,6 +22,7 @@ tts = TTS("tts_models/en/ljspeech/tacotron2-DDC")
 
 
 def _sanitize_text_for_tts(text: str) -> str:
+    # Remove markdown/JSON artifacts so speech sounds natural.
     if not text:
         return text
     s = unicodedata.normalize("NFKD", text)
@@ -88,6 +93,7 @@ def _sanitize_text_for_tts(text: str) -> str:
 
 
 def _concatenate_wavs(wav_paths, out_path):
+    # Concatenate chunk WAV files while normalizing channels/sample-rate.
     if not wav_paths:
         raise ValueError("No wav files to concatenate")
 
@@ -147,6 +153,7 @@ def _concatenate_wavs(wav_paths, out_path):
 
 
 def generate_audio_feedback(text: str, output_path: str) -> str | None:
+    # First try one-shot synthesis; if that fails, fall back to sentence chunking.
     text = _sanitize_text_for_tts(text)
     if not text:
         logger.warning("Empty text after sanitization; skipping TTS generation")

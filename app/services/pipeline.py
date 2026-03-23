@@ -1,4 +1,10 @@
-"""End-to-end AI pipeline orchestration."""
+"""End-to-end AI pipeline orchestration.
+
+Pipeline stages:
+1) validate file, 2) detect person/pose, 3) crop frames,
+4) run SwingNet events, 5) detect biomechanical faults,
+6) generate text and audio feedback.
+"""
 from __future__ import annotations
 
 import json
@@ -107,6 +113,7 @@ class GolfAssistant:
         signals: Dict[str, float] | None = None,
         details: Dict[str, object] | None = None,
     ) -> Dict[str, object]:
+        # Keep failure responses in one consistent structure for UI and API callers.
         payload = self._validation_payload(False, message, score, signals, details)
         metrics = {}
         if signals:
@@ -153,7 +160,7 @@ class GolfAssistant:
                 cap.release()
             except Exception:
                 fps = 0
-            # If video FPS is high, skip every other frame to reduce compute
+            # If FPS is high, subsample frames to reduce compute with minimal quality loss.
             if fps >= 45:
                 every_n = min(self.max_detector_stride, 2)
 
@@ -196,6 +203,7 @@ class GolfAssistant:
         return rgb
 
     def build_crops_from_metadata(self, metadata):
+        # Re-read source frames and crop around detected person boxes for SwingNet input.
         if not metadata:
             return [], [], []
         cap = cv2.VideoCapture(self.video_path)
@@ -254,6 +262,7 @@ class GolfAssistant:
         return collected_rgb, collected_frame_idxs, collected_keypoints
 
     def frames_to_swingnet_np(self, frames_rgb):
+        # Convert images to CHW normalized tensors expected by the pretrained model.
         arr = np.stack(frames_rgb, axis=0).astype(np.float32) / 255.0
         arr = arr.transpose(0, 3, 1, 2).copy()
         arr = (arr - self.mean[None, :, None, None]) / self.std[None, :, None, None]
@@ -357,6 +366,7 @@ class GolfAssistant:
         return exported
 
     def run(self, allow_trim: bool = True):
+        # Main orchestration entry used by both HTML and JSON endpoints.
         pipeline_start = time.time()
 
         file_ok, file_message, file_info = validate_file_level(self.video_path)
@@ -482,6 +492,7 @@ class GolfAssistant:
         events_map = {EVENT_LIST[i]: int(ef) for i, ef in enumerate(event_frames)}
 
         if allow_trim:
+            # Optional second pass on a trimmed clip can improve event localization.
             trimmed_path = trim_video_by_frames(
                 self.video_path,
                 events_map.get("Address", 0),

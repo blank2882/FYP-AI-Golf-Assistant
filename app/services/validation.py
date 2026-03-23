@@ -1,4 +1,8 @@
-"""Video validation utilities for golf swing uploads."""
+"""Video validation utilities for golf swing uploads.
+
+Includes both file-level checks (duration/FPS/resolution) and signal-level
+checks (pose coverage, motion quality, model confidence).
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -59,6 +63,7 @@ def read_video_info(video_path: str) -> Dict[str, float]:
 
 
 def validate_file_level(video_path: str) -> Tuple[bool, str, Dict[str, float]]:
+    # Reject unsupported or low-quality uploads before heavy model inference.
     ext = Path(video_path).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         return False, "Unsupported file type. Please upload an MP4 or MOV video.", {}
@@ -84,6 +89,7 @@ def validate_file_level(video_path: str) -> Tuple[bool, str, Dict[str, float]]:
 
 
 def compute_pose_presence_ratio(metadata: List[Dict[str, object]]) -> float:
+    # Ratio of processed frames where a reasonably complete pose is present.
     if not metadata:
         return 0.0
 
@@ -138,6 +144,7 @@ def compute_motion_pattern_score(
     frame_idxs: List[int],
     fps: float,
 ) -> Tuple[float, Dict[str, float]]:
+    # Score whether wrist dynamics and torso separation resemble a swing pattern.
     if kps.size == 0 or len(frame_idxs) < 6 or fps <= 0:
         return 0.0, {"wrist_score": 0.0, "separation_score": 0.0}
 

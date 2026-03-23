@@ -1,4 +1,8 @@
-"""SwingNet temporal segmentation helpers."""
+"""SwingNet temporal segmentation helpers.
+
+Given a sequence of cropped frames, this module predicts golf swing
+event probabilities over time.
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -50,6 +54,7 @@ class SwingNetInferer:
         return probs
 
     def run_sliding(self, frames_np: np.ndarray, model_seq_len: int = 64, stride: int | None = None) -> np.ndarray:
+        # Sliding-window inference supports clips longer than the model sequence length.
         T = frames_np.shape[0]
         if stride is None:
             stride = max(1, model_seq_len // 2)
@@ -68,6 +73,7 @@ class SwingNetInferer:
         if starts[-1] != T - model_seq_len:
             starts.append(T - model_seq_len)
         for s in starts:
+            # Average overlapping window predictions for smoother per-frame probabilities.
             e = s + model_seq_len
             window = frames_np[s:e]
             probs_w = self.run_window(window)
